@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}StockIA{% endblock %}</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  {% block extra_css %}{% endblock %}
+</head>
+<body class="bg-gray-100 min-h-screen">
+
+  {% if user.is_authenticated %}
+    {% include "components/navbar.html" %}
+  {% endif %}
+
+  <main class="max-w-7xl mx-auto px-4 py-8">
+
+    {% if messages %}
+      {% for message in messages %}
+        <div class="mb-4 p-4 rounded-lg
+          {% if message.tags == 'error' %}bg-red-100 text-red-800
+          {% elif message.tags == 'success' %}bg-green-100 text-green-800
+          {% else %}bg-blue-100 text-blue-800{% endif %}">
+          {{ message }}
+        </div>
+      {% endfor %}
+    {% endif %}
+
+    {% block content %}{% endblock %}
+  </main>
+
+  {% block extra_js %}{% endblock %}
+</body>
+</html>
