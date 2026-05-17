@@ -2,41 +2,170 @@
 {% block title %}Mi cuenta — StockIA{% endblock %}
 
 {% block content %}
-<div class="max-w-lg mx-auto bg-white rounded-xl shadow p-8">
-  <h1 class="text-2xl font-bold text-gray-800 mb-6">Mi cuenta</h1>
+<div class="max-w-3xl mx-auto space-y-8">
 
-  <div class="mb-8">
+  <div class="bg-white rounded-xl shadow p-6">
     <p class="text-sm text-gray-500">Usuario</p>
-    <p class="text-lg font-medium">{{ user.username }}</p>
+    <p class="text-xl font-bold text-gray-800">{{ user.username }}</p>
   </div>
 
+  <!-- Selección de proveedor de IA -->
   <div>
-    <h2 class="text-lg font-semibold text-gray-700 mb-2">API key de Anthropic</h2>
+    <h2 class="text-lg font-bold text-gray-800 mb-4">Elige tu proveedor de IA</h2>
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+
+      <!-- Gemini -->
+      <div class="bg-white rounded-xl shadow p-5 border-2 {% if perfil.proveedor == 'gemini' %}border-blue-600{% else %}border-transparent{% endif %}">
+        <div class="flex items-center justify-between mb-2">
+          <span class="font-semibold text-gray-800">Gemini Flash</span>
+          <span class="bg-green-100 text-green-700 text-xs px-2 py-1 rounded-full font-medium">Gratis</span>
+        </div>
+        <p class="text-xs text-gray-500 mb-3">Google · Hasta 1 millón de tokens al día sin costo.</p>
+        <ul class="text-xs text-gray-600 space-y-1 mb-4">
+          <li>✓ Gratuito con límites generosos</li>
+          <li>✓ Rápido y preciso</li>
+          <li>✓ Soporte de herramientas (tool calling)</li>
+          <li>✗ Requiere cuenta Google</li>
+        </ul>
+        <a href="https://aistudio.google.com/apikey" target="_blank"
+           class="text-xs text-blue-600 hover:underline block mb-3">
+          → Obtener key en aistudio.google.com
+        </a>
+        <form method="post">
+          {% csrf_token %}
+          <input type="hidden" name="proveedor" value="gemini">
+          <button type="submit"
+            class="w-full text-sm py-2 rounded-lg font-medium transition
+            {% if perfil.proveedor == 'gemini' %}bg-blue-700 text-white{% else %}bg-gray-100 text-gray-700 hover:bg-gray-200{% endif %}">
+            {% if perfil.proveedor == 'gemini' %}Seleccionado{% else %}Seleccionar{% endif %}
+          </button>
+        </form>
+      </div>
+
+      <!-- Groq -->
+      <div class="bg-white rounded-xl shadow p-5 border-2 {% if perfil.proveedor == 'groq' %}border-blue-600{% else %}border-transparent{% endif %}">
+        <div class="flex items-center justify-between mb-2">
+          <span class="font-semibold text-gray-800">Groq</span>
+          <span class="bg-green-100 text-green-700 text-xs px-2 py-1 rounded-full font-medium">Gratis</span>
+        </div>
+        <p class="text-xs text-gray-500 mb-3">Groq Inc. · LLaMA 3.3 70B. Extremadamente rápido.</p>
+        <ul class="text-xs text-gray-600 space-y-1 mb-4">
+          <li>✓ Gratis con límites diarios</li>
+          <li>✓ El más rápido disponible</li>
+          <li>✓ Soporte de herramientas</li>
+          <li>✗ Límite de tokens por minuto</li>
+        </ul>
+        <a href="https://console.groq.com/keys" target="_blank"
+           class="text-xs text-blue-600 hover:underline block mb-3">
+          → Obtener key en console.groq.com
+        </a>
+        <form method="post">
+          {% csrf_token %}
+          <input type="hidden" name="proveedor" value="groq">
+          <button type="submit"
+            class="w-full text-sm py-2 rounded-lg font-medium transition
+            {% if perfil.proveedor == 'groq' %}bg-blue-700 text-white{% else %}bg-gray-100 text-gray-700 hover:bg-gray-200{% endif %}">
+            {% if perfil.proveedor == 'groq' %}Seleccionado{% else %}Seleccionar{% endif %}
+          </button>
+        </form>
+      </div>
+
+      <!-- Ollama -->
+      <div class="bg-white rounded-xl shadow p-5 border-2 {% if perfil.proveedor == 'ollama' %}border-blue-600{% else %}border-transparent{% endif %}">
+        <div class="flex items-center justify-between mb-2">
+          <span class="font-semibold text-gray-800">Ollama (Local)</span>
+          <span class="bg-green-100 text-green-700 text-xs px-2 py-1 rounded-full font-medium">100% Gratis</span>
+        </div>
+        <p class="text-xs text-gray-500 mb-3">Corre en tu propio computador. Sin internet, sin API key.</p>
+        <ul class="text-xs text-gray-600 space-y-1 mb-4">
+          <li>✓ Completamente gratis, sin límites</li>
+          <li>✓ Sin internet, tus datos nunca salen</li>
+          <li>✗ Requiere instalar Ollama localmente</li>
+          <li>✗ Necesita computador con buena RAM</li>
+        </ul>
+        <a href="https://ollama.com" target="_blank"
+           class="text-xs text-blue-600 hover:underline block mb-3">
+          → Descargar Ollama en ollama.com
+        </a>
+        <form method="post">
+          {% csrf_token %}
+          <input type="hidden" name="proveedor" value="ollama">
+          <button type="submit"
+            class="w-full text-sm py-2 rounded-lg font-medium transition
+            {% if perfil.proveedor == 'ollama' %}bg-blue-700 text-white{% else %}bg-gray-100 text-gray-700 hover:bg-gray-200{% endif %}">
+            {% if perfil.proveedor == 'ollama' %}Seleccionado{% else %}Seleccionar{% endif %}
+          </button>
+        </form>
+      </div>
+
+      <!-- Claude -->
+      <div class="bg-white rounded-xl shadow p-5 border-2 {% if perfil.proveedor == 'claude' %}border-blue-600{% else %}border-transparent{% endif %}">
+        <div class="flex items-center justify-between mb-2">
+          <span class="font-semibold text-gray-800">Claude (Anthropic)</span>
+          <span class="bg-yellow-100 text-yellow-700 text-xs px-2 py-1 rounded-full font-medium">De paga</span>
+        </div>
+        <p class="text-xs text-gray-500 mb-3">El más capaz. El costo depende del uso de cada tendero (BYOK).</p>
+        <ul class="text-xs text-gray-600 space-y-1 mb-4">
+          <li>✓ Mejor calidad de respuesta</li>
+          <li>✓ Sin límites de velocidad</li>
+          <li>✓ Análisis más profundos</li>
+          <li>✗ Costo según consumo del tendero</li>
+        </ul>
+        <a href="https://console.anthropic.com" target="_blank"
+           class="text-xs text-blue-600 hover:underline block mb-3">
+          → Obtener key en console.anthropic.com
+        </a>
+        <form method="post">
+          {% csrf_token %}
+          <input type="hidden" name="proveedor" value="claude">
+          <button type="submit"
+            class="w-full text-sm py-2 rounded-lg font-medium transition
+            {% if perfil.proveedor == 'claude' %}bg-blue-700 text-white{% else %}bg-gray-100 text-gray-700 hover:bg-gray-200{% endif %}">
+            {% if perfil.proveedor == 'claude' %}Seleccionado{% else %}Seleccionar{% endif %}
+          </button>
+        </form>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- API Key -->
+  {% if perfil.proveedor != 'ollama' %}
+  <div class="bg-white rounded-xl shadow p-6">
+    <h2 class="text-lg font-semibold text-gray-700 mb-1">
+      API key — {{ perfil.get_proveedor_display }}
+    </h2>
+    <p class="text-xs text-gray-400 mb-4">
+      Tu key se guarda cifrada. Nunca se muestra después de guardarse.
+    </p>
 
     {% if perfil.tiene_api_key %}
       <p class="text-green-600 text-sm mb-4">✓ Tienes una API key configurada.</p>
     {% else %}
-      <p class="text-yellow-600 text-sm mb-4">
-        No tienes API key. Obtenla en
-        <a href="https://console.anthropic.com" target="_blank" class="underline">console.anthropic.com</a>
-        para usar el asistente IA.
-      </p>
+      <p class="text-yellow-600 text-sm mb-4">⚠ No tienes API key. El asistente no funcionará hasta que la agregues.</p>
     {% endif %}
 
-    <form method="post" class="space-y-4">
+    <form method="post" class="flex gap-3">
       {% csrf_token %}
-      <div>
-        <label class="block text-sm font-medium text-gray-700 mb-1">
-          {% if perfil.tiene_api_key %}Actualizar API key{% else %}Agregar API key{% endif %}
-        </label>
-        <input type="password" name="api_key" placeholder="sk-ant-..."
-          class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
-      </div>
+      <input type="password" name="api_key" placeholder="Pega tu API key aquí..."
+        class="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
       <button type="submit"
-        class="bg-blue-700 text-white px-6 py-2 rounded-lg font-medium hover:bg-blue-800 transition">
+        class="bg-blue-700 text-white px-5 py-2 rounded-lg text-sm font-medium hover:bg-blue-800 transition">
         Guardar
       </button>
     </form>
   </div>
+  {% else %}
+  <div class="bg-green-50 border border-green-200 rounded-xl p-6">
+    <p class="text-green-800 text-sm font-medium">
+      Ollama no requiere API key. Asegúrate de tener Ollama corriendo en tu computador
+      con el modelo <code class="bg-green-100 px-1 rounded">qwen2.5:7b</code> instalado.
+    </p>
+    <p class="text-green-700 text-xs mt-2">
+      Comando para instalar el modelo: <code class="bg-green-100 px-1 rounded">ollama pull qwen2.5:7b</code>
+    </p>
+  </div>
+  {% endif %}
+
 </div>
 {% endblock %}

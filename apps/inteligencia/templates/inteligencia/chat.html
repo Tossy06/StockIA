@@ -1,0 +1,157 @@
+{% extends "base.html" %}
+{% block title %}Asistente IA — StockIA{% endblock %}
+
+{% block content %}
+<div class="max-w-3xl mx-auto">
+  <div class="flex items-center justify-between mb-4">
+    <h1 class="text-2xl font-bold text-gray-800">Asistente IA</h1>
+    <a href="{% url 'inteligencia:limpiar' %}"
+       class="text-xs text-gray-400 hover:text-red-500 transition">
+      Limpiar conversación
+    </a>
+  </div>
+
+  <!-- Historial de mensajes -->
+  <div id="chat" class="space-y-4 mb-6 min-h-64">
+    {% if not historial %}
+      <p class="text-gray-400 text-sm text-center py-12">
+        Pregúntame sobre tu inventario, ventas o cualquier dato de tu tienda.
+      </p>
+    {% endif %}
+    {% for mensaje in historial %}
+      {% if mensaje.rol == "usuario" %}
+        <div class="flex justify-end">
+          <div class="bg-blue-700 text-white rounded-2xl rounded-tr-sm px-4 py-3 max-w-lg text-sm">
+            {{ mensaje.contenido }}
+          </div>
+        </div>
+      {% else %}
+        <div class="flex justify-start">
+          <div class="bg-white shadow rounded-2xl rounded-tl-sm px-4 py-3 max-w-lg text-sm text-gray-800">
+            {{ mensaje.contenido }}
+            {% if mensaje.datos_grafica %}
+              <canvas class="mt-3" id="grafica-{{ mensaje.pk }}" height="200"></canvas>
+              <script>
+                document.addEventListener("DOMContentLoaded", function() {
+                  var d = {{ mensaje.datos_grafica|safe }};
+                  renderGrafica("grafica-{{ mensaje.pk }}", d);
+                });
+              </script>
+            {% endif %}
+          </div>
+        </div>
+      {% endif %}
+    {% endfor %}
+  </div>
+
+  <!-- Input -->
+  <div class="bg-white rounded-xl shadow p-4">
+    <div class="flex gap-3">
+      <input id="inputMensaje" type="text" placeholder="¿Cuál es mi producto más vendido este mes?"
+        class="flex-1 border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+      <button id="btnEnviar" onclick="enviarMensaje()"
+        class="bg-blue-700 text-white px-5 py-2 rounded-lg text-sm font-medium hover:bg-blue-800 transition">
+        Enviar
+      </button>
+    </div>
+    <p id="estado" class="text-xs text-gray-400 mt-2 hidden">Claude está analizando tu tienda...</p>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+  const COLORES = ["rgba(29,78,216,0.7)","rgba(16,185,129,0.7)","rgba(245,158,11,0.7)","rgba(239,68,68,0.7)","rgba(139,92,246,0.7)"];
+
+  function renderGrafica(id, d) {
+    const ctx = document.getElementById(id);
+    if (!ctx || !d) return;
+    new Chart(ctx, {
+      type: d.tipo || "bar",
+      data: {
+        labels: d.labels || [],
+        datasets: [{
+          label: d.titulo || "",
+          data: d.datos || [],
+          backgroundColor: COLORES,
+          borderRadius: 6,
+        }]
+      },
+      options: {
+        responsive: true,
+        plugins: { legend: { display: false }, title: { display: !!d.titulo, text: d.titulo } },
+        scales: d.tipo === "pie" || d.tipo === "doughnut" ? {} : { y: { beginAtZero: true } }
+      }
+    });
+  }
+
+  function agregarBurbuja(texto, rol, grafica) {
+    const chat = document.getElementById("chat");
+    const vacio = chat.querySelector("p");
+    if (vacio) vacio.remove();
+
+    const div = document.createElement("div");
+    div.className = rol === "usuario" ? "flex justify-end" : "flex justify-start";
+
+    const burbuja = document.createElement("div");
+    burbuja.className = rol === "usuario"
+      ? "bg-blue-700 text-white rounded-2xl rounded-tr-sm px-4 py-3 max-w-lg text-sm"
+      : "bg-white shadow rounded-2xl rounded-tl-sm px-4 py-3 max-w-lg text-sm text-gray-800";
+    burbuja.textContent = texto;
+
+    if (grafica) {
+      const id = "g-" + Date.now();
+      const canvas = document.createElement("canvas");
+      canvas.id = id;
+      canvas.height = 200;
+      canvas.className = "mt-3";
+      burbuja.appendChild(canvas);
+      setTimeout(() => renderGrafica(id, grafica), 100);
+    }
+
+    div.appendChild(burbuja);
+    chat.appendChild(div);
+    chat.scrollTop = chat.scrollHeight;
+  }
+
+  async function enviarMensaje() {
+    const input = document.getElementById("inputMensaje");
+    const estado = document.getElementById("estado");
+    const texto = input.value.trim();
+    if (!texto) return;
+
+    agregarBurbuja(texto, "usuario", null);
+    input.value = "";
+    estado.classList.remove("hidden");
+    document.getElementById("btnEnviar").disabled = true;
+
+    try {
+      const res = await fetch("{% url 'inteligencia:mensaje' %}", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-CSRFToken": "{{ csrf_token }}",
+        },
+        body: JSON.stringify({ texto }),
+      });
+      const data = await res.json();
+      if (data.error) {
+        agregarBurbuja("Error: " + data.error, "asistente", null);
+      } else {
+        agregarBurbuja(data.texto, "asistente", data.grafica || null);
+      }
+    } catch (e) {
+      agregarBurbuja("Error de conexión. Intenta de nuevo.", "asistente", null);
+    } finally {
+      estado.classList.add("hidden");
+      document.getElementById("btnEnviar").disabled = false;
+      input.focus();
+    }
+  }
+
+  document.getElementById("inputMensaje").addEventListener("keydown", function(e) {
+    if (e.key === "Enter") enviarMensaje();
+  });
+</script>
+{% endblock %}

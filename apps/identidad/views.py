@@ -57,10 +57,17 @@ def configuracion_view(request):
     fernet = Fernet(settings.FERNET_KEY)
 
     if request.method == "POST":
+        proveedor = request.POST.get("proveedor", "").strip()
         api_key = request.POST.get("api_key", "").strip()
+
+        if proveedor and proveedor in PerfilTendero.Proveedor.values:
+            perfil.proveedor = proveedor
+            perfil.save()
+
         if api_key:
             perfil.guardar_api_key(api_key, fernet)
-            messages.success(request, "API key guardada correctamente.")
+
+        messages.success(request, "Configuración guardada.")
         return redirect("identidad:configuracion")
 
     return render(request, "identidad/configuracion.html", {"perfil": perfil})
