@@ -21,8 +21,9 @@ Universidad Manuela Beltrán · Ingeniería Web 2026-1 · Ing. Juan José Osorio
 
 StockIA permite a tenderos colombianos controlar su inventario desde el navegador,
 ver sus métricas en tiempo real con gráficas claras, y conversar con un asistente de
-inteligencia artificial (Claude de Anthropic) que analiza sus datos reales y responde
-en lenguaje natural con recomendaciones, análisis y visualizaciones personalizadas.
+inteligencia artificial (Claude de Anthropic) que consulta sus datos reales a través de
+servidores MCP y responde en lenguaje natural con recomendaciones, análisis y
+visualizaciones personalizadas.
 
 ---
 
@@ -33,12 +34,14 @@ en lenguaje natural con recomendaciones, análisis y visualizaciones personaliza
 | Backend | Django | 5.2 | Framework principal, ORM, auth, templates |
 | Frontend | Django Templates + Tailwind CDN + JS Vanilla | — | UI responsiva renderizada en servidor |
 | Gráficas | Chart.js | 4.x (CDN) | Renderizado de gráficas en el cliente |
-| Base de datos | PostgreSQL | 15 | Persistencia de todos los datos |
+| Base de datos | PostgreSQL | 17 | Persistencia de todos los datos |
 | IA | Claude API (Anthropic) | claude-sonnet-4-5 | Asistente conversacional BYOK |
+| MCP PostgreSQL | @henkdz/postgresql-mcp-server | latest | Claude accede a la BD en producción |
+| MCP propio | mcp (SDK Python de Anthropic) | latest | Servidor MCP con herramientas del negocio |
 | Cifrado | cryptography (Fernet) | 42.x | Cifrar API keys de tenderos en BD |
 | Archivos estáticos | WhiteNoise | 6.x | Servir estáticos desde Django sin Nginx |
 | Despliegue | Railway | — | Hosting Django + PostgreSQL, free tier |
-| MCP desarrollo | HenkDz/postgresql-mcp-server | latest | Claude Code lee la BD durante desarrollo |
+| MCP desarrollo | @henkdz/postgresql-mcp-server | latest | Claude Code lee la BD durante desarrollo |
 | Control versiones | Git + GitHub | — | Ramas: main, develop, feature/* |
 
 ---
@@ -60,13 +63,136 @@ Cuatro capas. Cada una solo conoce a la que está debajo. Sin excepciones.
 │  models.py · validaciones · reglas negocio  │
 ├─────────────────────────────────────────────┤
 │  INFRAESTRUCTURA                            │
-│  PostgreSQL · Claude API · WhiteNoise       │
+│  PostgreSQL · Claude API · MCP Servers      │
+│  WhiteNoise                                 │
 └─────────────────────────────────────────────┘
 ```
 
 **Regla absoluta:** la lógica de negocio NUNCA va en `views.py` ni en `models.py`.
 Todo pasa por `services.py`. Las views llaman al servicio, reciben el resultado y
 lo pasan al template. Nada más.
+
+---
+
+## Arquitectura de IA — MCP como capa central
+
+El asistente de IA no recibe datos inyectados manualmente en el prompt.
+Claude consulta los datos él mismo a través de dos servidores MCP que corren en producción.
+
+### Diagrama de flujo completo
+
+```
+Tendero escribe un mensaje en el chat
+              ↓
+  Django view → inteligencia/services.py
+              ↓
+  Descifrar API key del tendero (Fernet)
+              ↓
+  Llamar a Claude API con:
+    · key del tendero (BYOK)
+    · MCP 1: postgresql-mcp-server  ──→ PostgreSQL (lectura directa)
+    · MCP 2: stockia-mcp-server     ──→ Herramientas del negocio
+              ↓
+  Claude decide qué herramientas MCP invocar
+  según la pregunta del tendero
+              ↓
+  Claude obtiene datos reales de la tienda
+              ↓
+  Claude genera respuesta JSON estructurada
+              ↓
+  services.py parsea el JSON
+  Guarda Mensaje en la BD
+              ↓
+  Django renderiza texto + gráfica (Chart.js)
+```
+
+### MCP 1 — PostgreSQL (acceso directo a datos)
+
+Servidor: `@henkdz/postgresql-mcp-server`
+
+Le da a Claude acceso de lectura directa a todas las tablas de la tienda:
+productos, categorías, stock, ventas, líneas de venta, historial de conversaciones.
+Claude usa este MCP cuando necesita datos crudos que las herramientas del MCP 2 no cubren.
+
+> **Por qué HenkDz:** el servidor oficial de Anthropic (`@modelcontextprotocol/server-postgres`)
+> fue archivado en mayo 2025 y tiene una vulnerabilidad de SQL injection sin parchear.
+
+### MCP 2 — Servidor propio (herramientas del negocio)
+
+Servidor: `mcp_server/server.py` — construido con el SDK oficial de Python de MCP.
+
+Expone herramientas de alto nivel que Claude puede invocar directamente.
+Cada herramienta encapsula una consulta de negocio y devuelve datos listos para analizar.
+
+**Herramientas expuestas:**
+
+```python
+@mcp.tool()
+def obtener_stock_critico() -> list[dict]:
+    """Productos con stock_actual <= stock_minimo * 0.5."""
+
+@mcp.tool()
+def obtener_ventas_por_periodo(inicio: str, fin: str) -> list[dict]:
+    """Ventas agrupadas por día entre dos fechas ISO (YYYY-MM-DD)."""
+
+@mcp.tool()
+def obtener_top_productos(limite: int = 5, periodo: str = "mes") -> list[dict]:
+    """Productos más vendidos del período: dia | semana | mes."""
+
+@mcp.tool()
+def obtener_ingresos(periodo: str = "mes") -> dict:
+    """Ingresos totales del período: dia | semana | mes."""
+
+@mcp.tool()
+def obtener_resumen_negocio() -> dict:
+    """Snapshot completo: stock por estado, ingresos, top productos, últimas ventas."""
+```
+
+### Formato JSON que Claude siempre devuelve
+
+El prompt del sistema instruye a Claude a responder ÚNICAMENTE con este JSON:
+
+```json
+{
+  "tipo_respuesta": "texto | grafica | mixto",
+  "grafica": {
+    "tipo": "bar | line | pie | doughnut",
+    "titulo": "string",
+    "labels": ["string"],
+    "datos": [0]
+  },
+  "texto": "Análisis en lenguaje natural para el tendero"
+}
+```
+
+`grafica` solo existe cuando `tipo_respuesta` es `grafica` o `mixto`.
+`texto` siempre está presente.
+Django renderiza la gráfica con Chart.js si hay datos de gráfica.
+
+### Prompt del sistema base
+
+```
+Eres un asistente de inventario para una tienda de barrio colombiana.
+Tienes acceso a los datos reales del negocio a través de herramientas MCP.
+Úsalas para responder con datos precisos y actualizados.
+Responde SIEMPRE en español, en lenguaje simple que un tendero entienda.
+
+Responde ÚNICAMENTE con un objeto JSON válido con esta estructura exacta:
+{
+  "tipo_respuesta": "texto | grafica | mixto",
+  "grafica": { "tipo": "bar|line|pie|doughnut", "titulo": "", "labels": [], "datos": [] },
+  "texto": "tu análisis aquí"
+}
+
+No incluyas nada fuera del JSON. No uses markdown. Solo el objeto JSON.
+```
+
+### Lo que NO hace el sistema de IA
+
+- **No inyecta contexto manualmente** en el prompt — para eso están los MCP.
+- **No hace queries directas** desde `services.py` para alimentar a Claude — Claude consulta los datos él mismo.
+- **No expone la API key** del tendero al cliente nunca — la key solo la usa Django al llamar a Claude API.
+- **No usa MCP en el cliente** — los MCP corren en el servidor Django, no en el navegador.
 
 ---
 
@@ -79,9 +205,12 @@ stockia/
 ├── requirements/
 │   ├── base.txt
 │   └── dev.txt
+├── mcp_server/                     # Servidor MCP propio del negocio
+│   ├── __init__.py
+│   └── server.py                   # Herramientas MCP: stock, ventas, ingresos
 ├── .env                            # NUNCA subir a GitHub
 ├── .env.example                    # plantilla para el equipo
-├── .mcp.json                       # configuración MCP para Claude Code
+├── .mcp.json                       # MCP de desarrollo para Claude Code (no va al repo)
 ├── .gitignore
 ├── config/
 │   ├── __init__.py
@@ -94,7 +223,7 @@ stockia/
 │   ├── catalogo/                   # CRUD de productos y categorías
 │   ├── inventario/                 # dashboard, semáforo, alertas
 │   ├── ventas/                     # registro de ventas, descuento de stock
-│   ├── inteligencia/               # asistente IA, BYOK, Claude API
+│   ├── inteligencia/               # asistente IA, BYOK, Claude API + MCP
 │   └── identidad/                  # auth Django, configuración de API key
 ├── templates/
 │   ├── base.html
@@ -166,8 +295,8 @@ Nada más va en el modelo.
 Sin modelos propios. Lee desde `Producto` y `Venta`.
 
 `services.py` expone:
-- `obtener_resumen_dashboard(usuario)` → ingresos del día/semana/mes, conteo por estado de stock, top 5 productos más vendidos, últimas 10 ventas.
-- `obtener_productos_por_estado(estado)` → queryset filtrado.
+- `obtener_resumen_dashboard()` → ingresos del día/semana/mes, conteo por estado de stock, top 5 productos más vendidos, últimas 10 ventas.
+- `obtener_productos_por_estado(estado)` → lista filtrada por estado de stock.
 
 El dashboard siempre está visible. No requiere API key de IA.
 
@@ -224,9 +353,11 @@ class Conversacion(models.Model):
     creada_en = models.DateTimeField(auto_now_add=True)
 
 class Mensaje(models.Model):
-    ROL = models.TextChoices("ROL", "usuario asistente")
+    class Rol(models.TextChoices):
+        USUARIO = "usuario", "Usuario"
+        ASISTENTE = "asistente", "Asistente"
     conversacion = models.ForeignKey(Conversacion, on_delete=models.CASCADE, related_name="mensajes")
-    rol = models.CharField(max_length=20, choices=ROL.choices)
+    rol = models.CharField(max_length=20, choices=Rol.choices)
     contenido = models.TextField()
     tipo_respuesta = models.CharField(max_length=20, default="texto")  # texto | grafica | mixto
     datos_grafica = models.JSONField(null=True, blank=True)
@@ -235,54 +366,12 @@ class Mensaje(models.Model):
 
 `services.py` orquesta:
 1. Verificar que el usuario tiene API key configurada.
-2. Consultar datos relevantes en PostgreSQL (stock, ventas recientes, métricas).
-3. Construir el prompt del sistema con ese contexto.
-4. Llamar a Claude API con la key del usuario (BYOK).
-5. Parsear la respuesta JSON de Claude.
-6. Guardar el mensaje y devolver el resultado a la view.
-
-**Estructura JSON que Claude siempre devuelve:**
-
-```json
-{
-  "tipo_respuesta": "grafica | texto | mixto",
-  "grafica": {
-    "tipo": "bar | line | pie | doughnut",
-    "titulo": "string",
-    "labels": ["string"],
-    "datos": [0],
-    "color": "string (opcional)"
-  },
-  "texto": "Análisis en lenguaje natural para el tendero"
-}
-```
-
-`grafica` solo existe cuando `tipo_respuesta` es `grafica` o `mixto`.
-`texto` siempre está presente.
-Django renderiza la gráfica con Chart.js si hay datos de gráfica.
-
-**Prompt del sistema base:**
-
-```
-Eres un asistente de inventario para una tienda de barrio colombiana.
-Tienes acceso a los datos reales del negocio. Responde SIEMPRE en español,
-en lenguaje simple que un tendero entienda.
-
-Responde ÚNICAMENTE con un objeto JSON válido con esta estructura exacta:
-{
-  "tipo_respuesta": "texto | grafica | mixto",
-  "grafica": { "tipo": "bar|line|pie|doughnut", "titulo": "", "labels": [], "datos": [] },
-  "texto": "tu análisis aquí"
-}
-
-No incluyas nada fuera del JSON. No uses markdown. Solo el objeto JSON.
-
-CONTEXTO DEL NEGOCIO:
-{contexto_datos}
-```
-
-`{contexto_datos}` se inyecta con datos reales antes de cada llamada.
-No se usa MCP en el producto — el servicio construye el contexto con queries directas al ORM.
+2. Descifrar la API key con Fernet.
+3. Configurar los dos servidores MCP (PostgreSQL + propio).
+4. Llamar a Claude API con la key del usuario (BYOK) y los MCP configurados.
+5. Claude invoca las herramientas MCP que necesite para responder.
+6. Parsear la respuesta JSON de Claude.
+7. Guardar el `Mensaje` en la BD y devolver el resultado a la view.
 
 ---
 
@@ -316,12 +405,106 @@ explicativo con los pasos para obtenerla en console.anthropic.com.
 
 ---
 
-## MCP — dos contextos distintos
+## MCP — tres contextos, bien separados
 
-### Durante el desarrollo — herramienta para el equipo, no parte del producto
+### MCP 1 — PostgreSQL en producción (parte del producto)
+
+Conecta a Claude directamente con la base de datos de la tienda.
+Corre como proceso aparte en el servidor junto a Django.
+
+```json
+{
+  "mcpServers": {
+    "postgres": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "@henkdz/postgresql-mcp-server", "postgresql://user:pass@host:5432/db"]
+    }
+  }
+}
+```
+
+### MCP 2 — Servidor propio en producción (parte del producto)
+
+Construido con el SDK oficial de Python de MCP (`mcp` de Anthropic).
+Vive en `mcp_server/server.py`. Expone herramientas de negocio de alto nivel
+que Claude invoca según la pregunta del tendero.
+
+```python
+# mcp_server/server.py
+from mcp.server.fastmcp import FastMCP
+from apps.catalogo.models import Producto
+from apps.ventas.models import Venta, LineaVenta
+from django.db.models import Sum, F
+from django.utils import timezone
+
+mcp = FastMCP("stockia")
+
+@mcp.tool()
+def obtener_stock_critico() -> list[dict]:
+    """Productos con stock_actual <= stock_minimo * 0.5."""
+    productos = Producto.objects.filter(activo=True)
+    return [
+        {"nombre": p.nombre, "stock_actual": p.stock_actual, "stock_minimo": p.stock_minimo}
+        for p in productos if p.estado_stock == "critico"
+    ]
+
+@mcp.tool()
+def obtener_ventas_por_periodo(inicio: str, fin: str) -> list[dict]:
+    """Ventas agrupadas por día entre dos fechas ISO (YYYY-MM-DD)."""
+    ventas = Venta.objects.filter(fecha__date__range=[inicio, fin])
+    return list(ventas.values("fecha__date").annotate(total=Sum("total")).order_by("fecha__date"))
+
+@mcp.tool()
+def obtener_top_productos(limite: int = 5, periodo: str = "mes") -> list[dict]:
+    """Productos más vendidos. periodo: dia | semana | mes."""
+    hoy = timezone.now()
+    if periodo == "dia":
+        desde = hoy.replace(hour=0, minute=0, second=0)
+    elif periodo == "semana":
+        desde = hoy - timezone.timedelta(days=hoy.weekday())
+    else:
+        desde = hoy.replace(day=1, hour=0, minute=0, second=0)
+    return list(
+        LineaVenta.objects.filter(venta__fecha__gte=desde)
+        .values(nombre=F("producto__nombre"))
+        .annotate(total_vendido=Sum("cantidad"))
+        .order_by("-total_vendido")[:limite]
+    )
+
+@mcp.tool()
+def obtener_ingresos(periodo: str = "mes") -> dict:
+    """Ingresos totales del período: dia | semana | mes."""
+    hoy = timezone.now()
+    if periodo == "dia":
+        desde = hoy.replace(hour=0, minute=0, second=0)
+    elif periodo == "semana":
+        desde = hoy - timezone.timedelta(days=hoy.weekday())
+    else:
+        desde = hoy.replace(day=1, hour=0, minute=0, second=0)
+    total = Venta.objects.filter(fecha__gte=desde).aggregate(t=Sum("total"))["t"] or 0
+    return {"periodo": periodo, "total": float(total)}
+
+@mcp.tool()
+def obtener_resumen_negocio() -> dict:
+    """Snapshot completo del estado de la tienda."""
+    productos = list(Producto.objects.filter(activo=True))
+    return {
+        "total_productos": len(productos),
+        "stock_normal": sum(1 for p in productos if p.estado_stock == "normal"),
+        "stock_bajo": sum(1 for p in productos if p.estado_stock == "bajo"),
+        "stock_critico": sum(1 for p in productos if p.estado_stock == "critico"),
+        "ingresos_hoy": obtener_ingresos("dia")["total"],
+        "ingresos_mes": obtener_ingresos("mes")["total"],
+        "top_productos": obtener_top_productos(5, "mes"),
+    }
+```
+
+### MCP 3 — Desarrollo con Claude Code (NO es parte del producto)
 
 `.mcp.json` en la raíz conecta Claude Code con la base de datos local para
-que genere código más preciso al conocer el esquema real.
+que genere código más preciso al conocer el esquema real. Este archivo va en
+`.gitignore` — cada integrante configura sus credenciales locales.
 
 ```json
 {
@@ -332,36 +515,24 @@ que genere código más preciso al conocer el esquema real.
       "args": [
         "-y",
         "@henkdz/postgresql-mcp-server",
-        "postgresql://stockia_user:stockia_pass@localhost:5432/stockia_db"
+        "postgresql://postgres:password@localhost:5432/stockia-db"
       ]
     }
   }
 }
 ```
 
-> Las credenciales reales van en `.env`. El `.mcp.json` del repo usa valores de ejemplo.
-> Cada integrante configura sus credenciales locales.
-
-> **Por qué HenkDz:** el servidor oficial de Anthropic (`@modelcontextprotocol/server-postgres`)
-> fue archivado en mayo 2025 y tiene una vulnerabilidad de SQL injection sin parchear.
-
 Activar en Claude Code:
 ```bash
 claude mcp add-json postgres '{
   "type": "stdio",
   "command": "npx",
-  "args": ["-y", "@henkdz/postgresql-mcp-server", "postgresql://stockia_user:stockia_pass@localhost:5432/stockia_db"]
+  "args": ["-y", "@henkdz/postgresql-mcp-server", "postgresql://postgres:password@localhost:5432/stockia-db"]
 }' --scope project
 
 # Verificar
 /mcp
 ```
-
-### En el producto — así funciona la IA para el tendero
-
-No se usa MCP en el producto. `services.py` consulta PostgreSQL con el ORM de Django,
-construye el contexto como texto estructurado y lo inyecta en el prompt.
-Claude no tiene acceso directo a la base de datos — solo ve lo que el servicio decide incluir.
 
 ---
 
@@ -373,9 +544,9 @@ DJANGO_SETTINGS_MODULE=config.settings.dev
 SECRET_KEY=django-insecure-reemplazar-en-produccion
 DEBUG=True
 ALLOWED_HOSTS=localhost,127.0.0.1
-DB_NAME=stockia_db
-DB_USER=stockia_user
-DB_PASSWORD=stockia_pass
+DB_NAME=stockia-db
+DB_USER=postgres
+DB_PASSWORD=
 DB_HOST=localhost
 DB_PORT=5432
 FERNET_KEY=generar-con-Fernet.generate_key()
@@ -409,6 +580,7 @@ python-decouple==3.8
 whitenoise==6.7.0
 cryptography==42.0.8
 anthropic==0.28.0
+mcp[cli]
 gunicorn==22.0.0
 dj-database-url==2.1.0
 ```
@@ -446,18 +618,11 @@ ipython==8.24.0
 ```bash
 # Setup inicial
 python -m venv venv
-source venv/bin/activate        # Windows: venv\Scripts\activate
+venv\Scripts\activate          # Windows
 pip install -r requirements/dev.txt
 
 # Generar FERNET_KEY (ejecutar una vez, guardar en .env)
 python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
-
-# Base de datos local
-createdb stockia_db
-# o desde psql:
-# CREATE DATABASE stockia_db;
-# CREATE USER stockia_user WITH PASSWORD 'stockia_pass';
-# GRANT ALL PRIVILEGES ON DATABASE stockia_db TO stockia_user;
 
 # Django
 python manage.py migrate
@@ -467,6 +632,9 @@ python manage.py runserver
 # Migraciones
 python manage.py makemigrations
 python manage.py migrate
+
+# Correr el servidor MCP propio (desarrollo)
+python mcp_server/server.py
 
 # Formatear
 black .
@@ -487,6 +655,7 @@ claude
 - No guardar API keys de tenderos en texto plano — siempre Fernet
 - No exponer la API key del tendero en templates ni en respuestas JSON al cliente
 - No hacer queries manuales con `SELECT *` — usar el ORM de Django
+- No inyectar contexto manualmente en el prompt de Claude — para eso están los MCP
 - No commitear directamente a `main` — todo pasa por `develop` y PR
 
 ---
