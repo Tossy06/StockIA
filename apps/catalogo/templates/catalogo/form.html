@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% block title %}{% if producto %}Editar{% else %}Nuevo{% endif %} producto — StockIA{% endblock %}
+
+{% block content %}
+<div class="max-w-lg mx-auto bg-white rounded-xl shadow p-8">
+  <h1 class="text-2xl font-bold text-gray-800 mb-6">
+    {% if producto %}Editar producto{% else %}Nuevo producto{% endif %}
+  </h1>
+
+  <form method="post" class="space-y-4">
+    {% csrf_token %}
+
+    <div>
+      <label class="block text-sm font-medium text-gray-700 mb-1">Nombre</label>
+      <input type="text" name="nombre" value="{{ producto.nombre }}" required
+        class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
+    </div>
+
+    <div>
+      <label class="block text-sm font-medium text-gray-700 mb-1">Categoría</label>
+      <select name="categoria_id" required
+        class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
+        <option value="">Selecciona una categoría</option>
+        {% for cat in categorias %}
+          <option value="{{ cat.pk }}"
+            {% if producto.categoria_id == cat.pk %}selected{% endif %}>
+            {{ cat.nombre }}
+          </option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <div>
+      <label class="block text-sm font-medium text-gray-700 mb-1">Precio unitario ($)</label>
+      <input type="number" name="precio_unitario" value="{{ producto.precio_unitario }}"
+        step="0.01" min="0" required
+        class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
+    </div>
+
+    <div class="grid grid-cols-2 gap-4">
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1">Stock actual</label>
+        <input type="number" name="stock_actual" value="{{ producto.stock_actual }}"
+          min="0" required
+          class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
+      </div>
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1">Stock mínimo</label>
+        <input type="number" name="stock_minimo" value="{{ producto.stock_minimo }}"
+          min="0" required
+          class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
+      </div>
+    </div>
+
+    <div class="flex gap-3 pt-2">
+      <button type="submit"
+        class="bg-blue-700 text-white px-6 py-2 rounded-lg font-medium hover:bg-blue-800 transition">
+        {% if producto %}Guardar cambios{% else %}Crear producto{% endif %}
+      </button>
+      <a href="{% url 'catalogo:lista' %}"
+        class="bg-gray-100 text-gray-700 px-6 py-2 rounded-lg font-medium hover:bg-gray-200 transition">
+        Cancelar
+      </a>
+    </div>
+  </form>
+</div>
+{% endblock %}

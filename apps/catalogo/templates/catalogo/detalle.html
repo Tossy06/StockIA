@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block title %}{{ producto.nombre }} — StockIA{% endblock %}
+
+{% block content %}
+<div class="max-w-lg mx-auto bg-white rounded-xl shadow p-8">
+  <div class="flex items-center justify-between mb-6">
+    <h1 class="text-2xl font-bold text-gray-800">{{ producto.nombre }}</h1>
+    <span class="text-sm
+      {% if producto.estado_stock == 'critico' %}bg-red-100 text-red-700
+      {% elif producto.estado_stock == 'bajo' %}bg-yellow-100 text-yellow-700
+      {% else %}bg-green-100 text-green-700{% endif %}
+      px-3 py-1 rounded-full font-medium">
+      {{ producto.estado_stock|capfirst }}
+    </span>
+  </div>
+
+  <dl class="space-y-3 text-sm">
+    <div class="flex justify-between">
+      <dt class="text-gray-500">Categoría</dt>
+      <dd class="font-medium text-gray-800">{{ producto.categoria.nombre }}</dd>
+    </div>
+    <div class="flex justify-between">
+      <dt class="text-gray-500">Precio unitario</dt>
+      <dd class="font-medium text-gray-800">${{ producto.precio_unitario }}</dd>
+    </div>
+    <div class="flex justify-between">
+      <dt class="text-gray-500">Stock actual</dt>
+      <dd class="font-medium text-gray-800">{{ producto.stock_actual }} unidades</dd>
+    </div>
+    <div class="flex justify-between">
+      <dt class="text-gray-500">Stock mínimo</dt>
+      <dd class="font-medium text-gray-800">{{ producto.stock_minimo }} unidades</dd>
+    </div>
+    <div class="flex justify-between">
+      <dt class="text-gray-500">Registrado el</dt>
+      <dd class="font-medium text-gray-800">{{ producto.creado_en|date:"d/m/Y" }}</dd>
+    </div>
+  </dl>
+
+  <div class="flex gap-3 mt-8">
+    <a href="{% url 'catalogo:editar' producto.pk %}"
+       class="bg-blue-700 text-white px-5 py-2 rounded-lg text-sm font-medium hover:bg-blue-800 transition">
+      Editar
+    </a>
+    <a href="{% url 'catalogo:lista' %}"
+       class="bg-gray-100 text-gray-700 px-5 py-2 rounded-lg text-sm font-medium hover:bg-gray-200 transition">
+      Volver
+    </a>
+  </div>
+</div>
+{% endblock %}
