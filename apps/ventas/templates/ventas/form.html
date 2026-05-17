@@ -1,0 +1,142 @@
+{% extends "base.html" %}
+{% block title %}Nueva venta — StockIA{% endblock %}
+
+{% block content %}
+<div class="max-w-2xl mx-auto">
+  <h1 class="text-2xl font-bold text-gray-800 mb-6">Nueva venta</h1>
+
+  <div class="bg-white rounded-xl shadow p-6 mb-4">
+    <h2 class="text-sm font-semibold text-gray-600 uppercase mb-3">Agregar producto</h2>
+    <div class="flex gap-3">
+      <select id="selectProducto"
+        class="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+        <option value="">Selecciona un producto</option>
+        {% for p in productos %}
+          <option value="{{ p.pk }}" data-nombre="{{ p.nombre }}" data-precio="{{ p.precio_unitario }}" data-stock="{{ p.stock_actual }}">
+            {{ p.nombre }} — ${{ p.precio_unitario }} (stock: {{ p.stock_actual }})
+          </option>
+        {% endfor %}
+      </select>
+      <input type="number" id="inputCantidad" min="1" value="1" placeholder="Cant."
+        class="w-24 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+      <button onclick="agregarLinea()"
+        class="bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-800 transition">
+        Agregar
+      </button>
+    </div>
+  </div>
+
+  <!-- Líneas de la venta -->
+  <div class="bg-white rounded-xl shadow p-6 mb-4">
+    <h2 class="text-sm font-semibold text-gray-600 uppercase mb-3">Resumen de la venta</h2>
+    <div id="lineasContainer">
+      <p id="msgVacio" class="text-gray-400 text-sm text-center py-4">Agrega productos para comenzar.</p>
+      <table id="tablaLineas" class="w-full text-sm hidden">
+        <thead class="text-gray-500 uppercase text-xs border-b">
+          <tr>
+            <th class="pb-2 text-left">Producto</th>
+            <th class="pb-2 text-right">Precio</th>
+            <th class="pb-2 text-right">Cantidad</th>
+            <th class="pb-2 text-right">Subtotal</th>
+            <th class="pb-2"></th>
+          </tr>
+        </thead>
+        <tbody id="cuerpoTabla" class="divide-y divide-gray-100"></tbody>
+        <tfoot>
+          <tr>
+            <td colspan="3" class="pt-3 text-right font-semibold text-gray-700">Total:</td>
+            <td class="pt-3 text-right font-bold text-blue-700 text-lg" id="totalVenta">$0</td>
+            <td></td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+  </div>
+
+  <form method="post" id="formVenta">
+    {% csrf_token %}
+    <input type="hidden" name="lineas" id="inputLineas" value="[]">
+    <div class="flex gap-3">
+      <button type="submit"
+        class="bg-green-600 text-white px-6 py-2 rounded-lg font-medium hover:bg-green-700 transition">
+        Registrar venta
+      </button>
+      <a href="{% url 'ventas:lista' %}"
+        class="bg-gray-100 text-gray-700 px-6 py-2 rounded-lg font-medium hover:bg-gray-200 transition">
+        Cancelar
+      </a>
+    </div>
+  </form>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+  const lineas = [];
+
+  function agregarLinea() {
+    const select = document.getElementById("selectProducto");
+    const cantidad = parseInt(document.getElementById("inputCantidad").value);
+    const option = select.options[select.selectedIndex];
+
+    if (!select.value) return alert("Selecciona un producto.");
+    if (!cantidad || cantidad < 1) return alert("La cantidad debe ser mayor a 0.");
+    if (cantidad > parseInt(option.dataset.stock)) {
+      return alert(`Stock insuficiente. Disponible: ${option.dataset.stock}`);
+    }
+
+    const existente = lineas.find(l => l.producto_id == select.value);
+    if (existente) {
+      existente.cantidad += cantidad;
+    } else {
+      lineas.push({
+        producto_id: parseInt(select.value),
+        nombre: option.dataset.nombre,
+        precio: parseFloat(option.dataset.precio),
+        cantidad,
+      });
+    }
+    renderTabla();
+  }
+
+  function eliminarLinea(index) {
+    lineas.splice(index, 1);
+    renderTabla();
+  }
+
+  function renderTabla() {
+    const tabla = document.getElementById("tablaLineas");
+    const cuerpo = document.getElementById("cuerpoTabla");
+    const msg = document.getElementById("msgVacio");
+
+    if (lineas.length === 0) {
+      tabla.classList.add("hidden");
+      msg.classList.remove("hidden");
+      document.getElementById("inputLineas").value = "[]";
+      document.getElementById("totalVenta").textContent = "$0";
+      return;
+    }
+
+    tabla.classList.remove("hidden");
+    msg.classList.add("hidden");
+
+    cuerpo.innerHTML = lineas.map((l, i) => `
+      <tr>
+        <td class="py-2">${l.nombre}</td>
+        <td class="py-2 text-right">$${l.precio.toFixed(2)}</td>
+        <td class="py-2 text-right">${l.cantidad}</td>
+        <td class="py-2 text-right font-medium">$${(l.precio * l.cantidad).toFixed(2)}</td>
+        <td class="py-2 text-right">
+          <button onclick="eliminarLinea(${i})" class="text-red-500 hover:text-red-700 text-xs">✕</button>
+        </td>
+      </tr>
+    `).join("");
+
+    const total = lineas.reduce((s, l) => s + l.precio * l.cantidad, 0);
+    document.getElementById("totalVenta").textContent = `$${total.toFixed(2)}`;
+    document.getElementById("inputLineas").value = JSON.stringify(
+      lineas.map(l => ({ producto_id: l.producto_id, cantidad: l.cantidad }))
+    );
+  }
+</script>
+{% endblock %}

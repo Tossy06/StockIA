@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block title %}Ventas — StockIA{% endblock %}
+
+{% block content %}
+<div class="flex items-center justify-between mb-6">
+  <h1 class="text-2xl font-bold text-gray-800">Ventas</h1>
+  <a href="{% url 'ventas:nueva' %}"
+     class="bg-blue-700 text-white px-4 py-2 rounded-lg hover:bg-blue-800 transition text-sm font-medium">
+    + Nueva venta
+  </a>
+</div>
+
+{% if ventas %}
+<div class="bg-white rounded-xl shadow overflow-hidden">
+  <table class="w-full text-sm">
+    <thead class="bg-gray-50 text-gray-600 uppercase text-xs">
+      <tr>
+        <th class="px-4 py-3 text-left"># Venta</th>
+        <th class="px-4 py-3 text-left">Fecha</th>
+        <th class="px-4 py-3 text-left">Productos</th>
+        <th class="px-4 py-3 text-right">Total</th>
+      </tr>
+    </thead>
+    <tbody class="divide-y divide-gray-100">
+      {% for venta in ventas %}
+      <tr class="hover:bg-gray-50">
+        <td class="px-4 py-3 font-medium text-gray-800">#{{ venta.pk }}</td>
+        <td class="px-4 py-3 text-gray-500">{{ venta.fecha|date:"d/m/Y H:i" }}</td>
+        <td class="px-4 py-3 text-gray-600">
+          {% for linea in venta.lineas.all %}
+            {{ linea.cantidad }}x {{ linea.producto.nombre }}{% if not forloop.last %}, {% endif %}
+          {% endfor %}
+        </td>
+        <td class="px-4 py-3 text-right font-bold text-gray-800">${{ venta.total }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<div class="bg-white rounded-xl shadow p-12 text-center text-gray-400">
+  <p class="text-lg mb-4">Aún no hay ventas registradas.</p>
+  <a href="{% url 'ventas:nueva' %}" class="text-blue-700 hover:underline">Registrar la primera</a>
+</div>
+{% endif %}
+{% endblock %}
