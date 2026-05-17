@@ -1,0 +1,123 @@
+{% extends "base.html" %}
+{% block title %}Dashboard — StockIA{% endblock %}
+
+{% block content %}
+<h1 class="text-2xl font-bold text-gray-800 mb-6">Dashboard</h1>
+
+<!-- Tarjetas de ingresos -->
+<div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
+  <div class="bg-white rounded-xl shadow p-6">
+    <p class="text-sm text-gray-500 mb-1">Ingresos hoy</p>
+    <p class="text-3xl font-bold text-blue-700">${{ resumen.ingresos_dia }}</p>
+  </div>
+  <div class="bg-white rounded-xl shadow p-6">
+    <p class="text-sm text-gray-500 mb-1">Ingresos esta semana</p>
+    <p class="text-3xl font-bold text-blue-700">${{ resumen.ingresos_semana }}</p>
+  </div>
+  <div class="bg-white rounded-xl shadow p-6">
+    <p class="text-sm text-gray-500 mb-1">Ingresos este mes</p>
+    <p class="text-3xl font-bold text-blue-700">${{ resumen.ingresos_mes }}</p>
+  </div>
+</div>
+
+<!-- Semáforo de stock + Gráfica top productos -->
+<div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+
+  <!-- Semáforo -->
+  <div class="bg-white rounded-xl shadow p-6">
+    <h2 class="text-lg font-semibold text-gray-700 mb-4">Estado del inventario</h2>
+    <div class="space-y-3">
+      <div class="flex items-center justify-between">
+        <span class="flex items-center gap-2 text-green-700 font-medium">
+          <span class="w-3 h-3 rounded-full bg-green-500 inline-block"></span> Normal
+        </span>
+        <span class="text-2xl font-bold text-green-700">{{ resumen.stock_normal }}</span>
+      </div>
+      <div class="flex items-center justify-between">
+        <span class="flex items-center gap-2 text-yellow-700 font-medium">
+          <span class="w-3 h-3 rounded-full bg-yellow-400 inline-block"></span> Bajo
+        </span>
+        <span class="text-2xl font-bold text-yellow-600">{{ resumen.stock_bajo }}</span>
+      </div>
+      <div class="flex items-center justify-between">
+        <span class="flex items-center gap-2 text-red-700 font-medium">
+          <span class="w-3 h-3 rounded-full bg-red-500 inline-block"></span> Crítico
+        </span>
+        <span class="text-2xl font-bold text-red-600">{{ resumen.stock_critico }}</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Gráfica top 5 -->
+  <div class="bg-white rounded-xl shadow p-6">
+    <h2 class="text-lg font-semibold text-gray-700 mb-4">Top 5 productos más vendidos</h2>
+    {% if resumen.top_productos %}
+      <canvas id="graficaTop" height="180"></canvas>
+    {% else %}
+      <p class="text-gray-400 text-sm text-center mt-8">Aún no hay ventas registradas.</p>
+    {% endif %}
+  </div>
+
+</div>
+
+<!-- Últimas ventas -->
+<div class="bg-white rounded-xl shadow p-6">
+  <h2 class="text-lg font-semibold text-gray-700 mb-4">Últimas ventas</h2>
+  {% if resumen.ultimas_ventas %}
+  <table class="w-full text-sm">
+    <thead class="text-gray-500 uppercase text-xs border-b">
+      <tr>
+        <th class="pb-2 text-left"># Venta</th>
+        <th class="pb-2 text-left">Fecha</th>
+        <th class="pb-2 text-left">Productos</th>
+        <th class="pb-2 text-right">Total</th>
+      </tr>
+    </thead>
+    <tbody class="divide-y divide-gray-100">
+      {% for venta in resumen.ultimas_ventas %}
+      <tr>
+        <td class="py-2 text-gray-600">#{{ venta.pk }}</td>
+        <td class="py-2 text-gray-600">{{ venta.fecha|date:"d/m/Y H:i" }}</td>
+        <td class="py-2 text-gray-600">
+          {% for linea in venta.lineas.all %}
+            {{ linea.cantidad }}x {{ linea.producto.nombre }}{% if not forloop.last %}, {% endif %}
+          {% endfor %}
+        </td>
+        <td class="py-2 text-right font-medium text-gray-800">${{ venta.total }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+    <p class="text-gray-400 text-sm text-center py-6">Aún no hay ventas registradas.</p>
+  {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_js %}
+{% if resumen.top_productos %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+  const labels = [{% for p in resumen.top_productos %}"{{ p.nombre }}"{% if not forloop.last %},{% endif %}{% endfor %}];
+  const datos = [{% for p in resumen.top_productos %}{{ p.total_vendido }}{% if not forloop.last %},{% endif %}{% endfor %}];
+
+  new Chart(document.getElementById("graficaTop"), {
+    type: "bar",
+    data: {
+      labels,
+      datasets: [{
+        label: "Unidades vendidas",
+        data: datos,
+        backgroundColor: "rgba(29, 78, 216, 0.7)",
+        borderRadius: 6,
+      }]
+    },
+    options: {
+      responsive: true,
+      plugins: { legend: { display: false } },
+      scales: { y: { beginAtZero: true, ticks: { stepSize: 1 } } }
+    }
+  });
+</script>
+{% endif %}
+{% endblock %}
