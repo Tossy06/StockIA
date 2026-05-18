@@ -1,0 +1,169 @@
+{% extends "base.html" %}
+{% block title %}Categorías — StockIA{% endblock %}
+{% block page_title %}Categorías{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center justify-content-between mb-4">
+  <h4 class="fw-bold mb-0" style="color:var(--navy)">Categorías</h4>
+  <button class="btn btn-teal btn-sm" id="btn-nueva-cat">
+    <i class="bi bi-plus-lg me-1"></i>Nueva categoría
+  </button>
+</div>
+
+<!-- Formulario nueva categoría -->
+<div id="form-nueva-cat" class="card mb-4 d-none">
+  <div class="card-body">
+    <div class="d-flex gap-2 align-items-center">
+      <input type="text" id="inp-nueva-cat" class="form-control" placeholder="Nombre de la categoría" maxlength="100" style="max-width:320px">
+      <button class="btn btn-teal" id="btn-guardar-nueva">Crear</button>
+      <button class="btn" id="btn-cancelar-nueva" style="background:#eef1f6;color:var(--navy)">Cancelar</button>
+    </div>
+    <div id="err-nueva" class="mt-2" style="font-size:.8rem;color:#a31919;display:none"></div>
+  </div>
+</div>
+
+{% if categorias %}
+<div class="t-wrap">
+  <table class="table tbl mb-0" id="tbl-cats">
+    <thead>
+      <tr>
+        <th>Nombre</th>
+        <th class="text-center">Productos</th>
+        <th class="text-end">Acciones</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for cat in categorias %}
+      <tr id="row-{{ cat.pk }}">
+        <td>
+          <span class="cat-nombre" id="nombre-{{ cat.pk }}">{{ cat.nombre }}</span>
+          <div class="d-none edit-form mt-1" id="edit-{{ cat.pk }}">
+            <div class="d-flex gap-2">
+              <input type="text" class="form-control form-control-sm edit-inp" value="{{ cat.nombre }}" maxlength="100" style="max-width:260px">
+              <button class="btn btn-sm btn-teal btn-guardar" data-pk="{{ cat.pk }}">Guardar</button>
+              <button class="btn btn-sm btn-cancelar" data-pk="{{ cat.pk }}" style="background:#eef1f6;color:var(--navy)">Cancelar</button>
+            </div>
+            <div class="edit-err mt-1" style="font-size:.78rem;color:#a31919;display:none"></div>
+          </div>
+        </td>
+        <td class="text-center">
+          <span class="badge" style="background:var(--navy-bg);color:var(--navy);font-weight:600;border-radius:8px;padding:4px 10px">
+            {{ cat.num_productos }}
+          </span>
+        </td>
+        <td class="text-end">
+          <button class="btn btn-sm btn-o-navy btn-editar" data-pk="{{ cat.pk }}" title="Renombrar">
+            <i class="bi bi-pencil"></i>
+          </button>
+          <button class="btn btn-sm ms-1 btn-eliminar" data-pk="{{ cat.pk }}" data-nombre="{{ cat.nombre }}"
+            style="border-color:#dc3545;color:#dc3545" title="Eliminar">
+            <i class="bi bi-trash3"></i>
+          </button>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<div class="card">
+  <div class="card-body text-center py-5" style="color:#7a8fa6">
+    <i class="bi bi-tags" style="font-size:2.5rem;display:block;margin-bottom:12px;opacity:.4"></i>
+    <p class="mb-0">Aún no tienes categorías. Crea una para empezar.</p>
+  </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block extra_js %}
+<script>
+var CSRF = '{{ csrf_token }}';
+
+function post(url, body) {
+  return fetch(url, {
+    method: 'POST',
+    headers: {'Content-Type':'application/x-www-form-urlencoded','X-CSRFToken': CSRF},
+    body: body,
+  }).then(function(r){ return r.json(); });
+}
+
+/* ── Nueva categoría ── */
+document.getElementById('btn-nueva-cat').addEventListener('click', function(){
+  document.getElementById('form-nueva-cat').classList.remove('d-none');
+  document.getElementById('inp-nueva-cat').focus();
+});
+document.getElementById('btn-cancelar-nueva').addEventListener('click', function(){
+  document.getElementById('form-nueva-cat').classList.add('d-none');
+  document.getElementById('inp-nueva-cat').value = '';
+  document.getElementById('err-nueva').style.display = 'none';
+});
+document.getElementById('btn-guardar-nueva').addEventListener('click', function(){
+  var nombre = document.getElementById('inp-nueva-cat').value.trim();
+  var errEl = document.getElementById('err-nueva');
+  if(!nombre){ errEl.textContent = 'Escribe un nombre.'; errEl.style.display = 'block'; return; }
+  post("{% url 'catalogo:categoria_nueva' %}", 'nombre=' + encodeURIComponent(nombre))
+    .then(function(d){
+      if(d.error){ errEl.textContent = d.error; errEl.style.display = 'block'; return; }
+      // Agrega fila a la tabla o recarga la página
+      window.location.reload();
+    })
+    .catch(function(){ errEl.textContent = 'Error de red.'; errEl.style.display = 'block'; });
+});
+
+/* ── Editar ── */
+document.querySelectorAll('.btn-editar').forEach(function(btn){
+  btn.addEventListener('click', function(){
+    var pk = btn.dataset.pk;
+    document.getElementById('edit-' + pk).classList.remove('d-none');
+    document.getElementById('nombre-' + pk).classList.add('d-none');
+    btn.classList.add('d-none');
+    document.querySelector('#row-' + pk + ' .btn-eliminar').classList.add('d-none');
+    document.querySelector('#edit-' + pk + ' .edit-inp').focus();
+  });
+});
+document.querySelectorAll('.btn-cancelar').forEach(function(btn){
+  btn.addEventListener('click', function(){
+    var pk = btn.dataset.pk;
+    document.getElementById('edit-' + pk).classList.add('d-none');
+    document.getElementById('nombre-' + pk).classList.remove('d-none');
+    document.querySelector('#row-' + pk + ' .btn-editar').classList.remove('d-none');
+    document.querySelector('#row-' + pk + ' .btn-eliminar').classList.remove('d-none');
+    document.querySelector('#edit-' + pk + ' .edit-err').style.display = 'none';
+  });
+});
+document.querySelectorAll('.btn-guardar').forEach(function(btn){
+  btn.addEventListener('click', function(){
+    var pk = btn.dataset.pk;
+    var nombre = document.querySelector('#edit-' + pk + ' .edit-inp').value.trim();
+    var errEl = document.querySelector('#edit-' + pk + ' .edit-err');
+    if(!nombre){ errEl.textContent = 'Escribe un nombre.'; errEl.style.display = 'block'; return; }
+    post('/catalogo/categorias/' + pk + '/editar/', 'nombre=' + encodeURIComponent(nombre))
+      .then(function(d){
+        if(d.error){ errEl.textContent = d.error; errEl.style.display = 'block'; return; }
+        document.getElementById('nombre-' + pk).textContent = d.nombre;
+        document.querySelector('#edit-' + pk + ' .edit-inp').value = d.nombre;
+        document.querySelector('#row-' + pk + ' .btn-eliminar').dataset.nombre = d.nombre;
+        document.getElementById('edit-' + pk).classList.add('d-none');
+        document.getElementById('nombre-' + pk).classList.remove('d-none');
+        document.querySelector('#row-' + pk + ' .btn-editar').classList.remove('d-none');
+        document.querySelector('#row-' + pk + ' .btn-eliminar').classList.remove('d-none');
+      })
+      .catch(function(){ errEl.textContent = 'Error de red.'; errEl.style.display = 'block'; });
+  });
+});
+
+/* ── Eliminar ── */
+document.querySelectorAll('.btn-eliminar').forEach(function(btn){
+  btn.addEventListener('click', function(){
+    var pk = btn.dataset.pk;
+    var nombre = btn.dataset.nombre;
+    if(!confirm('¿Eliminar la categoría "' + nombre + '"? Los productos asociados quedarán sin categoría.')) return;
+    post('/catalogo/categorias/' + pk + '/eliminar/', '')
+      .then(function(d){
+        if(d.ok) document.getElementById('row-' + pk).remove();
+      })
+      .catch(function(){ alert('Error de red.'); });
+  });
+});
+</script>
+{% endblock %}

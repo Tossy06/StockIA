@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}StockIA{% endblock %}</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+  <style>
+    :root{--navy:#052A45;--navy-dark:#031d30;--lime:#E1EF15;--lime-dark:#c9d610;--teal:#33A679;--teal-dark:#2b9068}
+    *,*::before,*::after{box-sizing:border-box}
+    body{font-family:'Segoe UI',system-ui,-apple-system,sans-serif;margin:0}
+
+    /* ── Fondo ── */
+    .auth-wrap{
+      min-height:100vh;
+      background:linear-gradient(145deg,#020f1a 0%,#052A45 55%,#041f35 100%);
+      display:flex;align-items:center;justify-content:center;
+      padding:24px;position:relative;overflow:hidden;
+    }
+    .blob{position:absolute;border-radius:50%;filter:blur(90px);pointer-events:none}
+    .blob-1{width:520px;height:520px;background:radial-gradient(circle,rgba(51,166,121,.55),transparent 70%);top:-140px;left:-140px}
+    .blob-2{width:420px;height:420px;background:radial-gradient(circle,rgba(225,239,21,.18),transparent 70%);bottom:-100px;right:-100px}
+    .blob-3{width:280px;height:280px;background:radial-gradient(circle,rgba(10,100,180,.4),transparent 70%);top:55%;right:8%}
+
+    /* ── Card con blur ── */
+    .auth-card{
+      width:100%;max-width:430px;position:relative;z-index:1;
+      background:rgba(255,255,255,.07);
+      backdrop-filter:blur(28px);-webkit-backdrop-filter:blur(28px);
+      border:1px solid rgba(255,255,255,.13);
+      border-radius:26px;padding:50px 44px 44px;
+      box-shadow:0 32px 80px rgba(0,0,0,.45),inset 0 1px 0 rgba(255,255,255,.1);
+    }
+
+    /* ── Logo ── */
+    .auth-logo{font-size:2.4rem;font-weight:900;color:var(--lime);letter-spacing:-1px;line-height:1}
+    .auth-logo span{color:rgba(255,255,255,.88)}
+    .auth-tag{font-size:.65rem;color:rgba(255,255,255,.32);text-transform:uppercase;letter-spacing:1.6px;margin-top:3px}
+
+    /* ── Título ── */
+    .auth-title{font-size:1.15rem;font-weight:700;color:#fff;margin:0}
+    .auth-sub{font-size:.82rem;color:rgba(255,255,255,.42);margin-top:2px}
+
+    /* ── Divider ── */
+    .auth-divider{border:none;border-top:1px solid rgba(255,255,255,.1);margin:22px 0}
+
+    /* ── Campos ── */
+    .field-block{margin-bottom:18px}
+    .field-block label{
+      display:block;font-size:.72rem;font-weight:700;
+      color:rgba(255,255,255,.48);text-transform:uppercase;letter-spacing:.9px;margin-bottom:8px;
+    }
+    .field-inner{position:relative}
+    .field-inner .f-icon{
+      position:absolute;left:14px;top:50%;transform:translateY(-50%);
+      color:rgba(255,255,255,.3);font-size:.95rem;pointer-events:none;transition:color .2s;
+    }
+    .field-inner input{
+      width:100%;background:rgba(255,255,255,.08);
+      border:1.5px solid rgba(255,255,255,.12);border-radius:13px;
+      padding:13px 44px 13px 42px;color:#fff;font-size:.92rem;
+      outline:none;transition:border-color .2s,background .2s,box-shadow .2s;
+      font-family:inherit;
+    }
+    .field-inner input::placeholder{color:rgba(255,255,255,.25)}
+    .field-inner input:focus{
+      border-color:var(--teal);
+      background:rgba(51,166,121,.1);
+      box-shadow:0 0 0 3px rgba(51,166,121,.2);
+    }
+    .field-inner input:focus~.f-icon{color:var(--teal)}
+    .eye-btn{
+      position:absolute;right:12px;top:50%;transform:translateY(-50%);
+      background:none;border:none;color:rgba(255,255,255,.3);
+      cursor:pointer;padding:4px 6px;line-height:1;transition:color .2s;
+    }
+    .eye-btn:hover{color:rgba(255,255,255,.7)}
+
+    /* Autofill del navegador — evita el fondo blanco */
+    input:-webkit-autofill,
+    input:-webkit-autofill:hover,
+    input:-webkit-autofill:focus{
+      -webkit-text-fill-color:#fff;
+      -webkit-box-shadow:0 0 0 1000px rgba(51,166,121,.12) inset;
+      box-shadow:0 0 0 1000px rgba(51,166,121,.12) inset;
+      border-color:var(--teal)!important;
+      transition:background-color 9999s ease 0s;
+    }
+
+    /* ── Botón submit ── */
+    .auth-btn{
+      width:100%;padding:14px;
+      background:var(--lime);border:none;border-radius:13px;
+      color:var(--navy);font-weight:800;font-size:.95rem;
+      cursor:pointer;font-family:inherit;letter-spacing:.2px;
+      transition:transform .15s,box-shadow .15s,background .15s;
+      box-shadow:0 4px 22px rgba(225,239,21,.28);
+    }
+    .auth-btn:hover{background:var(--lime-dark);transform:translateY(-1px);box-shadow:0 8px 30px rgba(225,239,21,.38)}
+    .auth-btn:active{transform:translateY(0)}
+
+    /* ── Footer del form ── */
+    .auth-footer{text-align:center;font-size:.84rem;color:rgba(255,255,255,.38);margin-top:20px}
+    .auth-footer a{color:var(--teal);font-weight:600;text-decoration:none}
+    .auth-footer a:hover{color:#4ecf95;text-decoration:underline}
+
+    /* ── Alertas ── */
+    .auth-alert{
+      border-radius:12px;padding:12px 16px;font-size:.85rem;
+      display:flex;align-items:center;gap:10px;margin-bottom:16px;
+      border:1px solid;
+    }
+    .auth-alert.err{background:rgba(220,38,38,.15);border-color:rgba(220,38,38,.3);color:#ffaaaa}
+    .auth-alert.ok{background:rgba(51,166,121,.15);border-color:rgba(51,166,121,.3);color:#7dffc5}
+  </style>
+  {% block extra_css %}{% endblock %}
+</head>
+<body>
+
+<div class="auth-wrap">
+  <div class="blob blob-1"></div>
+  <div class="blob blob-2"></div>
+  <div class="blob blob-3"></div>
+
+  <div class="auth-card">
+    {% if messages %}
+      {% for message in messages %}
+        <div class="auth-alert {% if message.tags == 'error' %}err{% else %}ok{% endif %}">
+          <i class="bi {% if message.tags == 'error' %}bi-exclamation-circle{% else %}bi-check-circle{% endif %}"></i>
+          {{ message }}
+        </div>
+      {% endfor %}
+    {% endif %}
+    {% block content %}{% endblock %}
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+{% block extra_js %}{% endblock %}
+</body>
+</html>

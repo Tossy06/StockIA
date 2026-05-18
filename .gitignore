@@ -38,3 +38,6 @@ Thumbs.db
 
 # MCP (credenciales locales)
 .mcp.json
+
+# Notas y documentación de sesión (local)
+AVANCES.md

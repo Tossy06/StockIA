@@ -7,13 +7,13 @@ from . import services
 
 @login_required
 def lista_view(request):
-    ventas = services.listar_ventas()
+    ventas = services.listar_ventas(request.user)
     return render(request, "ventas/lista.html", {"ventas": ventas})
 
 
 @login_required
 def form_view(request):
-    productos = services.listar_productos_activos()
+    productos = services.listar_productos_activos(request.user)
 
     if request.method == "POST":
         try:
@@ -22,7 +22,7 @@ def form_view(request):
             if not lineas:
                 messages.error(request, "Agrega al menos un producto a la venta.")
                 return render(request, "ventas/form.html", {"productos": productos})
-            venta = services.registrar_venta(lineas)
+            venta = services.registrar_venta(lineas, request.user)
             messages.success(request, f"Venta #{venta.pk} registrada por ${venta.total}.")
             return redirect("ventas:lista")
         except ValueError as e:

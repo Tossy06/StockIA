@@ -1,7 +1,9 @@
 from django.db import models
+from django.contrib.auth.models import User
 
 
 class Categoria(models.Model):
+    usuario = models.ForeignKey(User, on_delete=models.CASCADE, related_name="categorias", null=True)
     nombre = models.CharField(max_length=100)
 
     class Meta:
@@ -14,11 +16,13 @@ class Categoria(models.Model):
 
 
 class Producto(models.Model):
+    usuario = models.ForeignKey(User, on_delete=models.CASCADE, related_name="productos", null=True)
     nombre = models.CharField(max_length=200)
     categoria = models.ForeignKey(Categoria, on_delete=models.PROTECT)
     precio_unitario = models.DecimalField(max_digits=10, decimal_places=2)
     stock_actual = models.PositiveIntegerField(default=0)
     stock_minimo = models.PositiveIntegerField(default=5)
+    imagen = models.ImageField(upload_to='productos/', null=True, blank=True)
     activo = models.BooleanField(default=True)
     creado_en = models.DateTimeField(auto_now_add=True)
 

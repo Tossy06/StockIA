@@ -1,171 +1,364 @@
 {% extends "base.html" %}
 {% block title %}Mi cuenta — StockIA{% endblock %}
+{% block page_title %}Mi cuenta{% endblock %}
+
+{% block extra_css %}
+<style>
+  .prov-c{border:2px solid #e0e7ef;border-radius:14px;padding:18px;transition:border-color .2s,box-shadow .2s;height:100%}
+  .prov-c.sel{border-color:var(--teal);box-shadow:0 0 0 3px rgba(51,166,121,.15)}
+  .prov-name{font-weight:700;color:var(--navy);font-size:.95rem}
+  .prov-desc{font-size:.78rem;color:#7a8fa6;margin:4px 0 10px}
+  .prov-feat{font-size:.77rem;color:#4a5568;list-style:none;padding:0;margin:0 0 12px}
+  .prov-feat li{padding:2px 0}
+  .prov-feat .ok{color:var(--teal)}
+  .prov-feat .no{color:#99aab8}
+  .hist-msg{display:flex;align-items:flex-end;gap:8px;margin-bottom:10px}
+  .hist-msg.user{justify-content:flex-end}
+  .hist-msg.bot{justify-content:flex-start}
+  .hist-av{width:26px;height:26px;border-radius:50%;background:var(--navy);display:flex;align-items:center;justify-content:center;flex-shrink:0}
+  .hist-av i{color:var(--lime);font-size:.6rem}
+  .hist-bub-u{background:var(--teal);color:#fff;border-radius:14px 14px 4px 14px;padding:8px 13px;max-width:70%;font-size:.84rem;line-height:1.45;word-break:break-word}
+  .hist-bub-b{background:#fff;color:#1a2535;border-radius:14px 14px 14px 4px;padding:8px 13px;max-width:70%;font-size:.84rem;line-height:1.45;word-break:break-word;box-shadow:0 1px 4px rgba(5,42,69,.08)}
+  .graf-mini{border-radius:12px;border:2px solid #e0e7ef;padding:14px;background:#fff;transition:border-color .2s,box-shadow .2s;cursor:default}
+  .graf-mini:hover{border-color:var(--teal);box-shadow:0 2px 10px rgba(51,166,121,.12)}
+  .vista-card{border-radius:12px;border:2px solid #e0e7ef;padding:16px;background:#fff;transition:border-color .2s}
+  .vista-card:hover{border-color:var(--navy)}
+</style>
+{% endblock %}
 
 {% block content %}
-<div class="max-w-3xl mx-auto space-y-8">
-
-  <div class="bg-white rounded-xl shadow p-6">
-    <p class="text-sm text-gray-500">Usuario</p>
-    <p class="text-xl font-bold text-gray-800">{{ user.username }}</p>
+<!-- Perfil header -->
+<div class="card mb-4">
+  <div class="card-body d-flex align-items-center gap-4">
+    <div style="width:60px;height:60px;border-radius:50%;background:var(--navy);display:flex;align-items:center;justify-content:center;flex-shrink:0">
+      <span style="font-size:1.4rem;font-weight:800;color:var(--lime)">{{ user.username|slice:":1"|upper }}{{ user.username|slice:"1:2"|upper }}</span>
+    </div>
+    <div>
+      <div class="fw-bold" style="font-size:1.2rem;color:var(--navy)">{{ user.username }}</div>
+      <div style="font-size:.8rem;color:#7a8fa6">
+        Proveedor activo: <strong style="color:var(--teal)">{{ perfil.get_proveedor_display }}</strong>
+        {% if perfil.tiene_api_key %}· <span style="color:var(--teal)"><i class="bi bi-check-circle-fill"></i> API key configurada</span>
+        {% else %}· <span style="color:#d97706"><i class="bi bi-exclamation-circle-fill"></i> Sin API key</span>{% endif %}
+      </div>
+    </div>
   </div>
+</div>
 
-  <!-- Selección de proveedor de IA -->
-  <div>
-    <h2 class="text-lg font-bold text-gray-800 mb-4">Elige tu proveedor de IA</h2>
-    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+<!-- Tabs -->
+<ul class="nav nav-tabs" id="accountTabs">
+  <li class="nav-item">
+    <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#tab-ia">
+      <i class="bi bi-robot me-1"></i>Asistente IA
+    </button>
+  </li>
+  <li class="nav-item">
+    <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-historial">
+      <i class="bi bi-chat-square-text me-1"></i>Historial
+      {% if mensajes %}<span class="badge" style="background:var(--teal);font-size:.6rem;margin-left:4px">{{ mensajes|length }}</span>{% endif %}
+    </button>
+  </li>
+  <li class="nav-item">
+    <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-graficas" id="tab-graficas-btn">
+      <i class="bi bi-bar-chart me-1"></i>Gráficas IA
+      {% if graficas_ia %}<span class="badge" style="background:var(--teal);font-size:.6rem;margin-left:4px">{{ graficas_ia|length }}</span>{% endif %}
+    </button>
+  </li>
+  <li class="nav-item">
+    <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-vistas">
+      <i class="bi bi-layout-split me-1"></i>Vistas guardadas
+      {% if vistas %}<span class="badge" style="background:var(--navy);font-size:.6rem;margin-left:4px">{{ vistas|length }}</span>{% endif %}
+    </button>
+  </li>
+</ul>
+
+<div class="tab-content">
+
+  <!-- ── TAB: Asistente IA ── -->
+  <div class="tab-pane fade show active" id="tab-ia">
+    <h6 class="fw-bold mb-3" style="color:var(--navy)">Elige tu proveedor de IA</h6>
+    <div class="row g-3 mb-4">
 
       <!-- Gemini -->
-      <div class="bg-white rounded-xl shadow p-5 border-2 {% if perfil.proveedor == 'gemini' %}border-blue-600{% else %}border-transparent{% endif %}">
-        <div class="flex items-center justify-between mb-2">
-          <span class="font-semibold text-gray-800">Gemini Flash</span>
-          <span class="bg-green-100 text-green-700 text-xs px-2 py-1 rounded-full font-medium">Gratis</span>
+      <div class="col-sm-6 col-xl-3">
+        <div class="prov-c {% if perfil.proveedor == 'gemini' %}sel{% endif %}">
+          <div class="d-flex align-items-center justify-content-between mb-1">
+            <span class="prov-name">Gemini Flash</span>
+            <span class="bst bst-n">Gratis</span>
+          </div>
+          <p class="prov-desc">Google · Hasta 1M tokens/día sin costo.</p>
+          <ul class="prov-feat">
+            <li><span class="ok">✓</span> Generoso límite gratuito</li>
+            <li><span class="ok">✓</span> Rápido y preciso</li>
+            <li><span class="ok">✓</span> Soporte de herramientas</li>
+            <li><span class="no">✗</span> Requiere cuenta Google</li>
+          </ul>
+          <a href="https://aistudio.google.com/apikey" target="_blank" style="font-size:.75rem;color:var(--teal);text-decoration:none;display:block;margin-bottom:10px">
+            <i class="bi bi-box-arrow-up-right me-1"></i>Obtener key
+          </a>
+          <form method="post">{% csrf_token %}<input type="hidden" name="proveedor" value="gemini">
+            <button type="submit" class="btn w-100 btn-sm {% if perfil.proveedor == 'gemini' %}btn-teal{% else %}btn-o-navy{% endif %}">
+              {% if perfil.proveedor == 'gemini' %}<i class="bi bi-check-lg me-1"></i>Seleccionado{% else %}Seleccionar{% endif %}
+            </button>
+          </form>
         </div>
-        <p class="text-xs text-gray-500 mb-3">Google · Hasta 1 millón de tokens al día sin costo.</p>
-        <ul class="text-xs text-gray-600 space-y-1 mb-4">
-          <li>✓ Gratuito con límites generosos</li>
-          <li>✓ Rápido y preciso</li>
-          <li>✓ Soporte de herramientas (tool calling)</li>
-          <li>✗ Requiere cuenta Google</li>
-        </ul>
-        <a href="https://aistudio.google.com/apikey" target="_blank"
-           class="text-xs text-blue-600 hover:underline block mb-3">
-          → Obtener key en aistudio.google.com
-        </a>
-        <form method="post">
-          {% csrf_token %}
-          <input type="hidden" name="proveedor" value="gemini">
-          <button type="submit"
-            class="w-full text-sm py-2 rounded-lg font-medium transition
-            {% if perfil.proveedor == 'gemini' %}bg-blue-700 text-white{% else %}bg-gray-100 text-gray-700 hover:bg-gray-200{% endif %}">
-            {% if perfil.proveedor == 'gemini' %}Seleccionado{% else %}Seleccionar{% endif %}
-          </button>
-        </form>
       </div>
 
       <!-- Groq -->
-      <div class="bg-white rounded-xl shadow p-5 border-2 {% if perfil.proveedor == 'groq' %}border-blue-600{% else %}border-transparent{% endif %}">
-        <div class="flex items-center justify-between mb-2">
-          <span class="font-semibold text-gray-800">Groq</span>
-          <span class="bg-green-100 text-green-700 text-xs px-2 py-1 rounded-full font-medium">Gratis</span>
+      <div class="col-sm-6 col-xl-3">
+        <div class="prov-c {% if perfil.proveedor == 'groq' %}sel{% endif %}">
+          <div class="d-flex align-items-center justify-content-between mb-1">
+            <span class="prov-name">Groq</span>
+            <span class="bst bst-n">Gratis</span>
+          </div>
+          <p class="prov-desc">Groq Inc. · LLaMA 3.3 70B. El más veloz.</p>
+          <ul class="prov-feat">
+            <li><span class="ok">✓</span> Gratis con límites diarios</li>
+            <li><span class="ok">✓</span> El más rápido disponible</li>
+            <li><span class="ok">✓</span> Soporte de herramientas</li>
+            <li><span class="no">✗</span> Límite de tokens/minuto</li>
+          </ul>
+          <a href="https://console.groq.com/keys" target="_blank" style="font-size:.75rem;color:var(--teal);text-decoration:none;display:block;margin-bottom:10px">
+            <i class="bi bi-box-arrow-up-right me-1"></i>Obtener key
+          </a>
+          <form method="post">{% csrf_token %}<input type="hidden" name="proveedor" value="groq">
+            <button type="submit" class="btn w-100 btn-sm {% if perfil.proveedor == 'groq' %}btn-teal{% else %}btn-o-navy{% endif %}">
+              {% if perfil.proveedor == 'groq' %}<i class="bi bi-check-lg me-1"></i>Seleccionado{% else %}Seleccionar{% endif %}
+            </button>
+          </form>
         </div>
-        <p class="text-xs text-gray-500 mb-3">Groq Inc. · LLaMA 3.3 70B. Extremadamente rápido.</p>
-        <ul class="text-xs text-gray-600 space-y-1 mb-4">
-          <li>✓ Gratis con límites diarios</li>
-          <li>✓ El más rápido disponible</li>
-          <li>✓ Soporte de herramientas</li>
-          <li>✗ Límite de tokens por minuto</li>
-        </ul>
-        <a href="https://console.groq.com/keys" target="_blank"
-           class="text-xs text-blue-600 hover:underline block mb-3">
-          → Obtener key en console.groq.com
-        </a>
-        <form method="post">
-          {% csrf_token %}
-          <input type="hidden" name="proveedor" value="groq">
-          <button type="submit"
-            class="w-full text-sm py-2 rounded-lg font-medium transition
-            {% if perfil.proveedor == 'groq' %}bg-blue-700 text-white{% else %}bg-gray-100 text-gray-700 hover:bg-gray-200{% endif %}">
-            {% if perfil.proveedor == 'groq' %}Seleccionado{% else %}Seleccionar{% endif %}
-          </button>
-        </form>
       </div>
 
       <!-- Ollama -->
-      <div class="bg-white rounded-xl shadow p-5 border-2 {% if perfil.proveedor == 'ollama' %}border-blue-600{% else %}border-transparent{% endif %}">
-        <div class="flex items-center justify-between mb-2">
-          <span class="font-semibold text-gray-800">Ollama (Local)</span>
-          <span class="bg-green-100 text-green-700 text-xs px-2 py-1 rounded-full font-medium">100% Gratis</span>
+      <div class="col-sm-6 col-xl-3">
+        <div class="prov-c {% if perfil.proveedor == 'ollama' %}sel{% endif %}">
+          <div class="d-flex align-items-center justify-content-between mb-1">
+            <span class="prov-name">Ollama (Local)</span>
+            <span class="bst bst-n">100% Gratis</span>
+          </div>
+          <p class="prov-desc">Corre en tu computador. Sin internet, sin key.</p>
+          <ul class="prov-feat">
+            <li><span class="ok">✓</span> Sin límites, completamente gratis</li>
+            <li><span class="ok">✓</span> Tus datos nunca salen</li>
+            <li><span class="no">✗</span> Requiere instalar Ollama</li>
+            <li><span class="no">✗</span> Necesita buena RAM</li>
+          </ul>
+          <a href="https://ollama.com" target="_blank" style="font-size:.75rem;color:var(--teal);text-decoration:none;display:block;margin-bottom:10px">
+            <i class="bi bi-box-arrow-up-right me-1"></i>Descargar Ollama
+          </a>
+          <form method="post">{% csrf_token %}<input type="hidden" name="proveedor" value="ollama">
+            <button type="submit" class="btn w-100 btn-sm {% if perfil.proveedor == 'ollama' %}btn-teal{% else %}btn-o-navy{% endif %}">
+              {% if perfil.proveedor == 'ollama' %}<i class="bi bi-check-lg me-1"></i>Seleccionado{% else %}Seleccionar{% endif %}
+            </button>
+          </form>
         </div>
-        <p class="text-xs text-gray-500 mb-3">Corre en tu propio computador. Sin internet, sin API key.</p>
-        <ul class="text-xs text-gray-600 space-y-1 mb-4">
-          <li>✓ Completamente gratis, sin límites</li>
-          <li>✓ Sin internet, tus datos nunca salen</li>
-          <li>✗ Requiere instalar Ollama localmente</li>
-          <li>✗ Necesita computador con buena RAM</li>
-        </ul>
-        <a href="https://ollama.com" target="_blank"
-           class="text-xs text-blue-600 hover:underline block mb-3">
-          → Descargar Ollama en ollama.com
-        </a>
-        <form method="post">
-          {% csrf_token %}
-          <input type="hidden" name="proveedor" value="ollama">
-          <button type="submit"
-            class="w-full text-sm py-2 rounded-lg font-medium transition
-            {% if perfil.proveedor == 'ollama' %}bg-blue-700 text-white{% else %}bg-gray-100 text-gray-700 hover:bg-gray-200{% endif %}">
-            {% if perfil.proveedor == 'ollama' %}Seleccionado{% else %}Seleccionar{% endif %}
-          </button>
-        </form>
       </div>
 
       <!-- Claude -->
-      <div class="bg-white rounded-xl shadow p-5 border-2 {% if perfil.proveedor == 'claude' %}border-blue-600{% else %}border-transparent{% endif %}">
-        <div class="flex items-center justify-between mb-2">
-          <span class="font-semibold text-gray-800">Claude (Anthropic)</span>
-          <span class="bg-yellow-100 text-yellow-700 text-xs px-2 py-1 rounded-full font-medium">De paga</span>
+      <div class="col-sm-6 col-xl-3">
+        <div class="prov-c {% if perfil.proveedor == 'claude' %}sel{% endif %}">
+          <div class="d-flex align-items-center justify-content-between mb-1">
+            <span class="prov-name">Claude</span>
+            <span class="bst bst-b">De paga</span>
+          </div>
+          <p class="prov-desc">Anthropic · El más capaz. BYOK, paga tú.</p>
+          <ul class="prov-feat">
+            <li><span class="ok">✓</span> Mejor calidad de respuesta</li>
+            <li><span class="ok">✓</span> Sin límites de velocidad</li>
+            <li><span class="ok">✓</span> Análisis más profundos</li>
+            <li><span class="no">✗</span> Costo según tu consumo</li>
+          </ul>
+          <a href="https://console.anthropic.com" target="_blank" style="font-size:.75rem;color:var(--teal);text-decoration:none;display:block;margin-bottom:10px">
+            <i class="bi bi-box-arrow-up-right me-1"></i>Obtener key
+          </a>
+          <form method="post">{% csrf_token %}<input type="hidden" name="proveedor" value="claude">
+            <button type="submit" class="btn w-100 btn-sm {% if perfil.proveedor == 'claude' %}btn-teal{% else %}btn-o-navy{% endif %}">
+              {% if perfil.proveedor == 'claude' %}<i class="bi bi-check-lg me-1"></i>Seleccionado{% else %}Seleccionar{% endif %}
+            </button>
+          </form>
         </div>
-        <p class="text-xs text-gray-500 mb-3">El más capaz. El costo depende del uso de cada tendero (BYOK).</p>
-        <ul class="text-xs text-gray-600 space-y-1 mb-4">
-          <li>✓ Mejor calidad de respuesta</li>
-          <li>✓ Sin límites de velocidad</li>
-          <li>✓ Análisis más profundos</li>
-          <li>✗ Costo según consumo del tendero</li>
-        </ul>
-        <a href="https://console.anthropic.com" target="_blank"
-           class="text-xs text-blue-600 hover:underline block mb-3">
-          → Obtener key en console.anthropic.com
-        </a>
-        <form method="post">
-          {% csrf_token %}
-          <input type="hidden" name="proveedor" value="claude">
-          <button type="submit"
-            class="w-full text-sm py-2 rounded-lg font-medium transition
-            {% if perfil.proveedor == 'claude' %}bg-blue-700 text-white{% else %}bg-gray-100 text-gray-700 hover:bg-gray-200{% endif %}">
-            {% if perfil.proveedor == 'claude' %}Seleccionado{% else %}Seleccionar{% endif %}
-          </button>
-        </form>
       </div>
 
     </div>
-  </div>
 
-  <!-- API Key -->
-  {% if perfil.proveedor != 'ollama' %}
-  <div class="bg-white rounded-xl shadow p-6">
-    <h2 class="text-lg font-semibold text-gray-700 mb-1">
-      API key — {{ perfil.get_proveedor_display }}
-    </h2>
-    <p class="text-xs text-gray-400 mb-4">
-      Tu key se guarda cifrada. Nunca se muestra después de guardarse.
-    </p>
-
-    {% if perfil.tiene_api_key %}
-      <p class="text-green-600 text-sm mb-4">✓ Tienes una API key configurada.</p>
+    <!-- API Key -->
+    {% if perfil.proveedor != 'ollama' %}
+    <div class="card">
+      <div class="card-header">
+        <i class="bi bi-key me-2" style="color:var(--teal)"></i>
+        API key — {{ perfil.get_proveedor_display }}
+      </div>
+      <div class="card-body">
+        {% if perfil.tiene_api_key %}
+          <div class="alert alert-success py-2 mb-3" style="font-size:.85rem">
+            <i class="bi bi-check-circle-fill me-2"></i>Tienes una API key configurada y activa.
+          </div>
+        {% else %}
+          <div class="alert alert-warning py-2 mb-3" style="font-size:.85rem">
+            <i class="bi bi-exclamation-circle-fill me-2"></i>Sin API key — el asistente no funcionará hasta que la agregues.
+          </div>
+        {% endif %}
+        <p style="font-size:.78rem;color:#7a8fa6;margin-bottom:12px">
+          Tu key se guarda cifrada en la base de datos. Nunca se muestra después de guardarse.
+        </p>
+        <form method="post" class="d-flex gap-2">
+          {% csrf_token %}
+          <input type="password" name="api_key" placeholder="Pega tu nueva API key aquí…"
+            class="form-control flex-fill">
+          <button type="submit" class="btn btn-teal flex-shrink-0">
+            <i class="bi bi-floppy me-1"></i>Guardar
+          </button>
+        </form>
+      </div>
+    </div>
     {% else %}
-      <p class="text-yellow-600 text-sm mb-4">⚠ No tienes API key. El asistente no funcionará hasta que la agregues.</p>
+    <div class="card">
+      <div class="card-body" style="background:var(--teal-bg);border-radius:14px">
+        <p class="fw-semibold mb-1" style="color:var(--teal);font-size:.9rem">
+          <i class="bi bi-house-check me-1"></i>Ollama no requiere API key
+        </p>
+        <p style="font-size:.82rem;color:#1a6845;margin-bottom:8px">
+          Asegúrate de tener Ollama corriendo localmente con el modelo <code>qwen2.5:7b</code> instalado.
+        </p>
+        <code style="font-size:.8rem;color:var(--navy)">ollama pull qwen2.5:7b</code>
+      </div>
+    </div>
     {% endif %}
+  </div>
 
-    <form method="post" class="flex gap-3">
-      {% csrf_token %}
-      <input type="password" name="api_key" placeholder="Pega tu API key aquí..."
-        class="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
-      <button type="submit"
-        class="bg-blue-700 text-white px-5 py-2 rounded-lg text-sm font-medium hover:bg-blue-800 transition">
-        Guardar
-      </button>
-    </form>
+  <!-- ── TAB: Historial ── -->
+  <div class="tab-pane fade" id="tab-historial">
+    <div class="d-flex align-items-center justify-content-between mb-3">
+      <h6 class="fw-bold mb-0" style="color:var(--navy)">Historial de conversación</h6>
+      <a href="{% url 'inteligencia:limpiar' %}" class="btn btn-sm"
+         style="background:rgba(220,38,38,.08);color:#a31919;border:none;font-size:.78rem"
+         onclick="return confirm('¿Limpiar el historial?')">
+        <i class="bi bi-trash3 me-1"></i>Limpiar
+      </a>
+    </div>
+    {% if mensajes %}
+    <div class="card">
+      <div class="card-body" style="max-height:500px;overflow-y:auto">
+        {% for m in mensajes %}
+          {% if m.rol == "usuario" %}
+            <div class="hist-msg user">
+              <div class="hist-bub-u">{{ m.contenido }}</div>
+            </div>
+          {% else %}
+            <div class="hist-msg bot">
+              <div class="hist-av"><i class="bi bi-stars"></i></div>
+              <div class="hist-bub-b">{{ m.contenido }}</div>
+            </div>
+          {% endif %}
+        {% endfor %}
+      </div>
+    </div>
+    <div class="mt-2 text-end">
+      <a href="{% url 'inteligencia:chat' %}" class="btn btn-navy btn-sm">
+        <i class="bi bi-chat-dots me-1"></i>Abrir chat completo
+      </a>
+    </div>
+    {% else %}
+    <div class="card" style="border:2px dashed #d1d9e6!important;box-shadow:none!important;background:transparent!important">
+      <div class="card-body text-center py-5" style="color:#99aab8">
+        <i class="bi bi-chat-square" style="font-size:2.5rem;opacity:.35"></i>
+        <p class="mt-2 mb-0" style="font-size:.9rem">No hay historial de conversación aún.</p>
+      </div>
+    </div>
+    {% endif %}
   </div>
-  {% else %}
-  <div class="bg-green-50 border border-green-200 rounded-xl p-6">
-    <p class="text-green-800 text-sm font-medium">
-      Ollama no requiere API key. Asegúrate de tener Ollama corriendo en tu computador
-      con el modelo <code class="bg-green-100 px-1 rounded">qwen2.5:7b</code> instalado.
-    </p>
-    <p class="text-green-700 text-xs mt-2">
-      Comando para instalar el modelo: <code class="bg-green-100 px-1 rounded">ollama pull qwen2.5:7b</code>
-    </p>
+
+  <!-- ── TAB: Gráficas IA ── -->
+  <div class="tab-pane fade" id="tab-graficas">
+    <h6 class="fw-bold mb-3" style="color:var(--navy)">Gráficas generadas por IA</h6>
+    {% if graficas_ia %}
+    <div class="row g-3" id="graf-ia-grid">
+      {% for g in graficas_ia %}
+      <div class="col-md-6 col-xl-4">
+        <div class="graf-mini">
+          <div class="d-flex align-items-start justify-content-between mb-2">
+            <div>
+              <div style="font-size:.86rem;font-weight:600;color:var(--navy)">{{ g.titulo }}</div>
+              <small style="color:#7a8fa6">{{ g.creado_en|date:"d/m/Y H:i" }}</small>
+            </div>
+            <span class="bst bst-ia">IA</span>
+          </div>
+          <canvas id="gia-{{ g.pk }}" height="120" data-grafica='{{ g.data_json|safe }}'></canvas>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}
+    <div class="card" style="border:2px dashed #d1d9e6!important;box-shadow:none!important;background:transparent!important">
+      <div class="card-body text-center py-5" style="color:#99aab8">
+        <i class="bi bi-bar-chart-line" style="font-size:2.5rem;opacity:.35"></i>
+        <p class="mt-2 mb-0" style="font-size:.9rem">La IA no ha generado gráficas para ti todavía.</p>
+        <p style="font-size:.8rem;margin-top:4px">Pídele al asistente que analice tu tienda.</p>
+      </div>
+    </div>
+    {% endif %}
   </div>
-  {% endif %}
+
+  <!-- ── TAB: Vistas guardadas ── -->
+  <div class="tab-pane fade" id="tab-vistas">
+    <h6 class="fw-bold mb-3" style="color:var(--navy)">Vistas de dashboard guardadas</h6>
+    {% if vistas %}
+    <div class="row g-3">
+      {% for v in vistas %}
+      <div class="col-md-6">
+        <div class="vista-card">
+          <div class="d-flex align-items-center justify-content-between mb-2">
+            <div class="fw-semibold" style="color:var(--navy);font-size:.9rem">{{ v.nombre }}</div>
+            <small style="color:#7a8fa6">{{ v.creado_en|date:"d/m/Y H:i" }}</small>
+          </div>
+          <div style="font-size:.78rem;color:#99aab8;margin-bottom:12px">
+            {{ v.num_graficas }} gráfica{{ v.num_graficas|pluralize:",s" }}
+          </div>
+          <button class="btn btn-sm btn-o-navy" onclick="cargarVista({{ v.graficas_json|safe }})">
+            <i class="bi bi-eye me-1"></i>Ver en dashboard
+          </button>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}
+    <div class="card" style="border:2px dashed #d1d9e6!important;box-shadow:none!important;background:transparent!important">
+      <div class="card-body text-center py-5" style="color:#99aab8">
+        <i class="bi bi-layout-split" style="font-size:2.5rem;opacity:.35"></i>
+        <p class="mt-2 mb-0" style="font-size:.9rem">No hay vistas guardadas aún.</p>
+      </div>
+    </div>
+    {% endif %}
+  </div>
 
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Render gráficas IA en la tab
+(function(){
+  var CHART_C=['rgba(51,166,121,.8)','rgba(5,42,69,.8)','rgba(225,239,21,.85)','rgba(10,127,203,.8)','rgba(230,126,34,.8)','rgba(155,89,182,.8)'];
+  function renderAll(){
+    document.querySelectorAll('canvas[data-grafica]').forEach(function(c){
+      if(c.dataset.rendered)return;
+      try{
+        var g=JSON.parse(c.dataset.grafica);
+        if(!g.labels||!g.labels.length)return;
+        var pol=g.tipo==='pie'||g.tipo==='doughnut';
+        new Chart(c,{type:g.tipo||'bar',data:{labels:g.labels,datasets:[{data:g.datos||[],backgroundColor:pol?CHART_C:CHART_C[0],borderWidth:0,borderRadius:pol?0:4}]},options:{responsive:true,maintainAspectRatio:true,plugins:{legend:{display:pol,position:'bottom',labels:{boxWidth:8,font:{size:9}}}},scales:pol?{}:{x:{display:false},y:{display:false}}}});
+        c.dataset.rendered='1';
+      }catch(e){}
+    });
+  }
+  // Render when tab is shown
+  document.getElementById('tab-graficas-btn').addEventListener('shown.bs.tab',renderAll);
+  // If already on that tab
+  renderAll();
+})();
+
+function cargarVista(graficas){
+  sessionStorage.setItem('stockia_vista_pendiente',JSON.stringify(graficas));
+  window.location.href='/inventario/';
+}
+</script>
 {% endblock %}

@@ -11,28 +11,33 @@ from apps.catalogo.models import Producto
 from apps.ventas.models import Venta, LineaVenta
 
 
-def obtener_stock_critico() -> list[dict]:
-    productos = Producto.objects.filter(activo=True)
+def obtener_stock_critico(usuario=None) -> list[dict]:
+    qs = Producto.objects.filter(activo=True)
+    if usuario is not None:
+        qs = qs.filter(usuario=usuario)
     return [
         {
             "nombre": p.nombre,
             "stock_actual": p.stock_actual,
             "stock_minimo": p.stock_minimo,
         }
-        for p in productos if p.estado_stock == "critico"
+        for p in qs if p.estado_stock == "critico"
     ]
 
 
-def obtener_ventas_por_periodo(inicio: str, fin: str) -> list[dict]:
+def obtener_ventas_por_periodo(inicio: str, fin: str, usuario=None) -> list[dict]:
+    qs = Venta.objects.filter(fecha__date__range=[inicio, fin])
+    if usuario is not None:
+        qs = qs.filter(usuario=usuario)
     return list(
-        Venta.objects.filter(fecha__date__range=[inicio, fin])
-        .values("fecha__date")
+        qs.values("fecha__date")
         .annotate(total=Sum("total"))
         .order_by("fecha__date")
     )
 
 
-def obtener_top_productos(limite: int = 5, periodo: str = "mes") -> list[dict]:
+def obtener_top_productos(limite=5, periodo: str = "mes", usuario=None) -> list[dict]:
+    limite = int(limite)
     hoy = timezone.now()
     if periodo == "dia":
         desde = hoy.replace(hour=0, minute=0, second=0, microsecond=0)
@@ -41,15 +46,17 @@ def obtener_top_productos(limite: int = 5, periodo: str = "mes") -> list[dict]:
         desde = desde.replace(hour=0, minute=0, second=0, microsecond=0)
     else:
         desde = hoy.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    qs = LineaVenta.objects.filter(venta__fecha__gte=desde)
+    if usuario is not None:
+        qs = qs.filter(venta__usuario=usuario)
     return list(
-        LineaVenta.objects.filter(venta__fecha__gte=desde)
-        .values(nombre=F("producto__nombre"))
+        qs.values(nombre=F("producto__nombre"))
         .annotate(total_vendido=Sum("cantidad"))
         .order_by("-total_vendido")[:limite]
     )
 
 
-def obtener_ingresos(periodo: str = "mes") -> dict:
+def obtener_ingresos(periodo: str = "mes", usuario=None) -> dict:
     hoy = timezone.now()
     if periodo == "dia":
         desde = hoy.replace(hour=0, minute=0, second=0, microsecond=0)
@@ -58,20 +65,26 @@ def obtener_ingresos(periodo: str = "mes") -> dict:
         desde = desde.replace(hour=0, minute=0, second=0, microsecond=0)
     else:
         desde = hoy.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-    total = Venta.objects.filter(fecha__gte=desde).aggregate(t=Sum("total"))["t"] or 0
+    qs = Venta.objects.filter(fecha__gte=desde)
+    if usuario is not None:
+        qs = qs.filter(usuario=usuario)
+    total = qs.aggregate(t=Sum("total"))["t"] or 0
     return {"periodo": periodo, "total": float(total)}
 
 
-def obtener_resumen_negocio() -> dict:
-    productos = list(Producto.objects.filter(activo=True))
+def obtener_resumen_negocio(usuario=None) -> dict:
+    qs = Producto.objects.filter(activo=True)
+    if usuario is not None:
+        qs = qs.filter(usuario=usuario)
+    productos = list(qs)
     return {
         "total_productos": len(productos),
         "stock_normal": sum(1 for p in productos if p.estado_stock == "normal"),
         "stock_bajo": sum(1 for p in productos if p.estado_stock == "bajo"),
         "stock_critico": sum(1 for p in productos if p.estado_stock == "critico"),
-        "ingresos_hoy": obtener_ingresos("dia")["total"],
-        "ingresos_mes": obtener_ingresos("mes")["total"],
-        "top_productos": obtener_top_productos(5, "mes"),
+        "ingresos_hoy": obtener_ingresos("dia", usuario)["total"],
+        "ingresos_mes": obtener_ingresos("mes", usuario)["total"],
+        "top_productos": obtener_top_productos(5, "mes", usuario),
     }
 
 
@@ -84,8 +97,8 @@ HERRAMIENTAS_MAP = {
 }
 
 
-def ejecutar_herramienta(nombre: str, argumentos: dict):
+def ejecutar_herramienta(nombre: str, argumentos: dict, usuario=None):
     fn = HERRAMIENTAS_MAP.get(nombre)
     if fn is None:
         return {"error": f"Herramienta '{nombre}' no encontrada."}
-    return fn(**argumentos)
+    return fn(usuario=usuario, **(argumentos or {}))

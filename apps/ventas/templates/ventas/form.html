@@ -1,142 +1,140 @@
 {% extends "base.html" %}
 {% block title %}Nueva venta — StockIA{% endblock %}
+{% block page_title %}Nueva venta{% endblock %}
 
 {% block content %}
-<div class="max-w-2xl mx-auto">
-  <h1 class="text-2xl font-bold text-gray-800 mb-6">Nueva venta</h1>
+<div class="d-flex align-items-center gap-3 mb-4">
+  <a href="{% url 'ventas:lista' %}" class="btn btn-sm btn-o-navy"><i class="bi bi-arrow-left"></i></a>
+  <h4 class="fw-bold mb-0" style="color:var(--navy)">Registrar venta</h4>
+</div>
 
-  <div class="bg-white rounded-xl shadow p-6 mb-4">
-    <h2 class="text-sm font-semibold text-gray-600 uppercase mb-3">Agregar producto</h2>
-    <div class="flex gap-3">
-      <select id="selectProducto"
-        class="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
-        <option value="">Selecciona un producto</option>
-        {% for p in productos %}
-          <option value="{{ p.pk }}" data-nombre="{{ p.nombre }}" data-precio="{{ p.precio_unitario }}" data-stock="{{ p.stock_actual }}">
-            {{ p.nombre }} — ${{ p.precio_unitario }} (stock: {{ p.stock_actual }})
-          </option>
-        {% endfor %}
-      </select>
-      <input type="number" id="inputCantidad" min="1" value="1" placeholder="Cant."
-        class="w-24 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
-      <button onclick="agregarLinea()"
-        class="bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-800 transition">
-        Agregar
-      </button>
+<div class="row g-4">
+  <!-- Selector de producto -->
+  <div class="col-lg-5">
+    <div class="card h-100">
+      <div class="card-header"><i class="bi bi-plus-circle me-2" style="color:var(--teal)"></i>Agregar producto</div>
+      <div class="card-body">
+        <div class="mb-3">
+          <label class="form-label">Producto</label>
+          <select id="sel-prod" class="form-select">
+            <option value="">Selecciona un producto…</option>
+            {% for p in productos %}
+              <option value="{{ p.pk }}"
+                data-nombre="{{ p.nombre }}"
+                data-precio="{{ p.precio_unitario }}"
+                data-stock="{{ p.stock_actual }}">
+                {{ p.nombre }} — <span data-precio="{{ p.precio_unitario }}">${{ p.precio_unitario }}</span>
+                (stock: {{ p.stock_actual }})
+              </option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Cantidad</label>
+          <input type="number" id="inp-cant" min="1" value="1" class="form-control">
+        </div>
+        <div id="stock-info" class="alert alert-info py-2 d-none" style="font-size:.8rem"></div>
+        <button onclick="agregarLinea()" class="btn btn-teal w-100">
+          <i class="bi bi-plus-lg me-1"></i>Agregar a la venta
+        </button>
+      </div>
     </div>
   </div>
 
-  <!-- Líneas de la venta -->
-  <div class="bg-white rounded-xl shadow p-6 mb-4">
-    <h2 class="text-sm font-semibold text-gray-600 uppercase mb-3">Resumen de la venta</h2>
-    <div id="lineasContainer">
-      <p id="msgVacio" class="text-gray-400 text-sm text-center py-4">Agrega productos para comenzar.</p>
-      <table id="tablaLineas" class="w-full text-sm hidden">
-        <thead class="text-gray-500 uppercase text-xs border-b">
-          <tr>
-            <th class="pb-2 text-left">Producto</th>
-            <th class="pb-2 text-right">Precio</th>
-            <th class="pb-2 text-right">Cantidad</th>
-            <th class="pb-2 text-right">Subtotal</th>
-            <th class="pb-2"></th>
-          </tr>
-        </thead>
-        <tbody id="cuerpoTabla" class="divide-y divide-gray-100"></tbody>
-        <tfoot>
-          <tr>
-            <td colspan="3" class="pt-3 text-right font-semibold text-gray-700">Total:</td>
-            <td class="pt-3 text-right font-bold text-blue-700 text-lg" id="totalVenta">$0</td>
-            <td></td>
-          </tr>
-        </tfoot>
-      </table>
+  <!-- Resumen de la venta -->
+  <div class="col-lg-7">
+    <div class="card">
+      <div class="card-header d-flex align-items-center justify-content-between">
+        <span><i class="bi bi-cart3 me-2" style="color:var(--teal)"></i>Resumen de la venta</span>
+        <span class="fw-bold" style="color:var(--teal);font-size:.9rem" id="total-display">$0</span>
+      </div>
+      <div class="card-body" style="padding:0!important">
+        <div id="msg-vacio" class="text-center py-5" style="color:#99aab8">
+          <i class="bi bi-cart-x" style="font-size:2rem;opacity:.4"></i>
+          <p class="mt-2 mb-0" style="font-size:.85rem">Agrega productos para comenzar</p>
+        </div>
+        <table id="tbl-lineas" class="table tbl mb-0 d-none">
+          <thead>
+            <tr>
+              <th>Producto</th><th class="text-end">Precio</th>
+              <th class="text-end">Cant.</th><th class="text-end">Subtotal</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="tbody-lineas"></tbody>
+          <tfoot>
+            <tr>
+              <td colspan="3" class="text-end fw-semibold py-3" style="color:#7a8fa6;border:none">Total:</td>
+              <td class="text-end fw-bold py-3" style="font-size:1.1rem;color:var(--navy);border:none" id="total-cell">$0</td>
+              <td style="border:none"></td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
     </div>
-  </div>
 
-  <form method="post" id="formVenta">
-    {% csrf_token %}
-    <input type="hidden" name="lineas" id="inputLineas" value="[]">
-    <div class="flex gap-3">
-      <button type="submit"
-        class="bg-green-600 text-white px-6 py-2 rounded-lg font-medium hover:bg-green-700 transition">
-        Registrar venta
-      </button>
-      <a href="{% url 'ventas:lista' %}"
-        class="bg-gray-100 text-gray-700 px-6 py-2 rounded-lg font-medium hover:bg-gray-200 transition">
-        Cancelar
-      </a>
-    </div>
-  </form>
+    <form method="post" id="form-venta" class="mt-3">
+      {% csrf_token %}
+      <input type="hidden" name="lineas" id="inp-lineas" value="[]">
+      <div class="d-flex gap-2">
+        <button type="submit" class="btn btn-teal flex-fill" id="btn-registrar" disabled>
+          <i class="bi bi-check-circle me-1"></i>Registrar venta
+        </button>
+        <a href="{% url 'ventas:lista' %}" class="btn" style="background:#eef1f6;color:var(--navy)">Cancelar</a>
+      </div>
+    </form>
+  </div>
 </div>
 {% endblock %}
 
 {% block extra_js %}
 <script>
-  const lineas = [];
+var lineas=[];
 
-  function agregarLinea() {
-    const select = document.getElementById("selectProducto");
-    const cantidad = parseInt(document.getElementById("inputCantidad").value);
-    const option = select.options[select.selectedIndex];
+document.getElementById('sel-prod').addEventListener('change',function(){
+  var opt=this.options[this.selectedIndex];
+  var info=document.getElementById('stock-info');
+  if(this.value){
+    info.className='alert alert-info py-2';
+    info.textContent='Stock disponible: '+opt.dataset.stock+' unidades · Precio: $'+parseFloat(opt.dataset.precio).toLocaleString('en-US',{minimumFractionDigits:0,maximumFractionDigits:2});
+  }else{info.className='alert alert-info py-2 d-none';}
+});
 
-    if (!select.value) return alert("Selecciona un producto.");
-    if (!cantidad || cantidad < 1) return alert("La cantidad debe ser mayor a 0.");
-    if (cantidad > parseInt(option.dataset.stock)) {
-      return alert(`Stock insuficiente. Disponible: ${option.dataset.stock}`);
-    }
+function agregarLinea(){
+  var sel=document.getElementById('sel-prod');
+  var cant=parseInt(document.getElementById('inp-cant').value);
+  var opt=sel.options[sel.selectedIndex];
+  if(!sel.value)return;
+  if(!cant||cant<1){alert('La cantidad debe ser mayor a 0.');return;}
+  if(cant>parseInt(opt.dataset.stock)){alert('Stock insuficiente. Disponible: '+opt.dataset.stock);return;}
+  var ex=lineas.find(l=>l.producto_id==sel.value);
+  if(ex){ex.cantidad+=cant;}
+  else{lineas.push({producto_id:parseInt(sel.value),nombre:opt.dataset.nombre,precio:parseFloat(opt.dataset.precio),cantidad:cant});}
+  renderTabla();
+}
 
-    const existente = lineas.find(l => l.producto_id == select.value);
-    if (existente) {
-      existente.cantidad += cantidad;
-    } else {
-      lineas.push({
-        producto_id: parseInt(select.value),
-        nombre: option.dataset.nombre,
-        precio: parseFloat(option.dataset.precio),
-        cantidad,
-      });
-    }
-    renderTabla();
-  }
+function eliminarLinea(i){lineas.splice(i,1);renderTabla();}
 
-  function eliminarLinea(index) {
-    lineas.splice(index, 1);
-    renderTabla();
-  }
-
-  function renderTabla() {
-    const tabla = document.getElementById("tablaLineas");
-    const cuerpo = document.getElementById("cuerpoTabla");
-    const msg = document.getElementById("msgVacio");
-
-    if (lineas.length === 0) {
-      tabla.classList.add("hidden");
-      msg.classList.remove("hidden");
-      document.getElementById("inputLineas").value = "[]";
-      document.getElementById("totalVenta").textContent = "$0";
-      return;
-    }
-
-    tabla.classList.remove("hidden");
-    msg.classList.add("hidden");
-
-    cuerpo.innerHTML = lineas.map((l, i) => `
-      <tr>
-        <td class="py-2">${l.nombre}</td>
-        <td class="py-2 text-right">$${l.precio.toFixed(2)}</td>
-        <td class="py-2 text-right">${l.cantidad}</td>
-        <td class="py-2 text-right font-medium">$${(l.precio * l.cantidad).toFixed(2)}</td>
-        <td class="py-2 text-right">
-          <button onclick="eliminarLinea(${i})" class="text-red-500 hover:text-red-700 text-xs">✕</button>
-        </td>
-      </tr>
-    `).join("");
-
-    const total = lineas.reduce((s, l) => s + l.precio * l.cantidad, 0);
-    document.getElementById("totalVenta").textContent = `$${total.toFixed(2)}`;
-    document.getElementById("inputLineas").value = JSON.stringify(
-      lineas.map(l => ({ producto_id: l.producto_id, cantidad: l.cantidad }))
-    );
-  }
+function renderTabla(){
+  var tbl=document.getElementById('tbl-lineas');
+  var tb=document.getElementById('tbody-lineas');
+  var mv=document.getElementById('msg-vacio');
+  var btnR=document.getElementById('btn-registrar');
+  if(!lineas.length){tbl.classList.add('d-none');mv.classList.remove('d-none');btnR.disabled=true;document.getElementById('inp-lineas').value='[]';document.getElementById('total-cell').textContent='$0';document.getElementById('total-display').textContent='$0';return;}
+  tbl.classList.remove('d-none');mv.classList.add('d-none');btnR.disabled=false;
+  tb.innerHTML=lineas.map(function(l,i){
+    var sub=(l.precio*l.cantidad);
+    return '<tr><td class="fw-semibold" style="color:var(--navy)">'+l.nombre+'</td>'
+      +'<td class="text-end" style="color:#7a8fa6">$'+l.precio.toLocaleString('en-US',{minimumFractionDigits:0,maximumFractionDigits:2})+'</td>'
+      +'<td class="text-end">'+l.cantidad+'</td>'
+      +'<td class="text-end fw-bold" style="color:var(--navy)">$'+sub.toLocaleString('en-US',{minimumFractionDigits:0,maximumFractionDigits:2})+'</td>'
+      +'<td class="text-center"><button onclick="eliminarLinea('+i+')" class="btn btn-sm" style="padding:2px 8px;font-size:.75rem;background:rgba(220,38,38,.1);color:#a31919;border:none"><i class="bi bi-x-lg"></i></button></td></tr>';
+  }).join('');
+  var total=lineas.reduce(function(s,l){return s+l.precio*l.cantidad;},0);
+  var fmt='$'+total.toLocaleString('en-US',{minimumFractionDigits:0,maximumFractionDigits:2});
+  document.getElementById('total-cell').textContent=fmt;
+  document.getElementById('total-display').textContent=fmt;
+  document.getElementById('inp-lineas').value=JSON.stringify(lineas.map(function(l){return{producto_id:l.producto_id,cantidad:l.cantidad};}));
+}
 </script>
 {% endblock %}

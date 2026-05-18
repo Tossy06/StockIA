@@ -8,7 +8,19 @@ from . import services
 
 @login_required
 def chat_view(request):
-    historial = services.obtener_historial(request.user)
+    historial_raw = services.obtener_historial(request.user)
+    # Pre-serializar datos_grafica a JSON válido para evitar repr de Python en el template
+    historial = [
+        {
+            "pk": m.pk,
+            "rol": m.rol,
+            "contenido": m.contenido,
+            "tipo_respuesta": m.tipo_respuesta,
+            "datos_grafica": m.datos_grafica,
+            "datos_grafica_json": json.dumps(m.datos_grafica, default=str) if m.datos_grafica else "null",
+        }
+        for m in historial_raw
+    ]
     return render(request, "inteligencia/chat.html", {"historial": historial})
 
 
@@ -27,7 +39,26 @@ def mensaje_view(request):
 
 
 @login_required
+def historial_view(request):
+    mensajes = services.obtener_historial(request.user)
+    return JsonResponse({
+        "mensajes": [
+            {
+                "rol": m.rol,
+                "contenido": m.contenido,
+                "tipo_respuesta": m.tipo_respuesta,
+                "datos_grafica": m.datos_grafica,
+            }
+            for m in mensajes
+        ]
+    })
+
+
+@login_required
+@require_POST
 def limpiar_view(request):
     from .models import Conversacion
     Conversacion.objects.filter(usuario=request.user).delete()
+    if request.headers.get('Accept') == 'application/json':
+        return JsonResponse({"ok": True})
     return redirect("inteligencia:chat")

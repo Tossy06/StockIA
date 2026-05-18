@@ -1,67 +1,229 @@
 {% extends "base.html" %}
 {% block title %}{% if producto %}Editar{% else %}Nuevo{% endif %} producto — StockIA{% endblock %}
+{% block page_title %}{% if producto %}Editar producto{% else %}Nuevo producto{% endif %}{% endblock %}
+
+{% block extra_css %}
+<style>
+  .img-upload-zone{border:2px dashed #d1d9e6;border-radius:14px;padding:28px;text-align:center;cursor:pointer;transition:border-color .2s,background .2s;background:#fafbfc;position:relative}
+  .img-upload-zone:hover,.img-upload-zone.drag{border-color:var(--teal);background:var(--teal-bg)}
+  .img-upload-zone input[type=file]{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%}
+  .img-preview-wrap{position:relative;display:inline-block}
+  .img-preview{width:100%;max-height:220px;object-fit:cover;border-radius:10px;display:block}
+  .img-remove-btn{position:absolute;top:8px;right:8px;background:rgba(220,38,38,.85);border:none;color:#fff;border-radius:8px;width:28px;height:28px;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:.8rem;transition:background .15s}
+  .img-remove-btn:hover{background:#dc3545}
+</style>
+{% endblock %}
 
 {% block content %}
-<div class="max-w-lg mx-auto bg-white rounded-xl shadow p-8">
-  <h1 class="text-2xl font-bold text-gray-800 mb-6">
-    {% if producto %}Editar producto{% else %}Nuevo producto{% endif %}
-  </h1>
-
-  <form method="post" class="space-y-4">
-    {% csrf_token %}
-
-    <div>
-      <label class="block text-sm font-medium text-gray-700 mb-1">Nombre</label>
-      <input type="text" name="nombre" value="{{ producto.nombre }}" required
-        class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
+<div class="row justify-content-center">
+  <div class="col-lg-6 col-md-8">
+    <div class="d-flex align-items-center gap-3 mb-4">
+      <a href="{% url 'catalogo:lista' %}" class="btn btn-sm btn-o-navy"><i class="bi bi-arrow-left"></i></a>
+      <h4 class="fw-bold mb-0" style="color:var(--navy)">
+        {% if producto %}Editar producto{% else %}Nuevo producto{% endif %}
+      </h4>
     </div>
+    <div class="card">
+      <div class="card-body">
+        <form method="post" enctype="multipart/form-data">
+          {% csrf_token %}
+          <input type="hidden" name="borrar_imagen" id="borrar_imagen" value="0">
 
-    <div>
-      <label class="block text-sm font-medium text-gray-700 mb-1">Categoría</label>
-      <select name="categoria_id" required
-        class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
-        <option value="">Selecciona una categoría</option>
-        {% for cat in categorias %}
-          <option value="{{ cat.pk }}"
-            {% if producto.categoria_id == cat.pk %}selected{% endif %}>
-            {{ cat.nombre }}
-          </option>
-        {% endfor %}
-      </select>
-    </div>
+          <div class="mb-3">
+            <label class="form-label">Nombre del producto</label>
+            <input type="text" name="nombre" value="{{ producto.nombre }}" required
+              class="form-control" placeholder="Ej: Arroz Diana 1kg" autofocus>
+          </div>
 
-    <div>
-      <label class="block text-sm font-medium text-gray-700 mb-1">Precio unitario ($)</label>
-      <input type="number" name="precio_unitario" value="{{ producto.precio_unitario }}"
-        step="0.01" min="0" required
-        class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
-    </div>
+          <div class="mb-3">
+            <div class="d-flex align-items-center justify-content-between mb-1">
+              <label class="form-label mb-0">Categoría</label>
+              <button type="button" id="toggle-nueva-cat" class="btn btn-sm"
+                style="font-size:.75rem;padding:2px 10px;color:var(--teal);background:var(--teal-bg);border:none;border-radius:7px;font-weight:600">
+                <i class="bi bi-plus-lg me-1"></i>Nueva
+              </button>
+            </div>
+            <select name="categoria_id" id="sel-categoria" required class="form-select">
+              <option value="">Selecciona una categoría…</option>
+              {% for cat in categorias %}
+                <option value="{{ cat.pk }}" {% if producto.categoria_id == cat.pk %}selected{% endif %}>
+                  {{ cat.nombre }}
+                </option>
+              {% endfor %}
+            </select>
+            <div id="nueva-cat-form" class="d-none mt-2">
+              <div class="d-flex gap-2">
+                <input type="text" id="nueva-cat-inp" class="form-control form-control-sm"
+                  placeholder="Nombre de la categoría" maxlength="100">
+                <button type="button" id="crear-cat-btn" class="btn btn-sm btn-teal" style="white-space:nowrap">
+                  Crear
+                </button>
+                <button type="button" id="cancelar-cat-btn" class="btn btn-sm"
+                  style="background:#eef1f6;color:var(--navy);white-space:nowrap">
+                  Cancelar
+                </button>
+              </div>
+              <div id="nueva-cat-error" class="mt-1" style="font-size:.78rem;color:#a31919;display:none"></div>
+            </div>
+          </div>
 
-    <div class="grid grid-cols-2 gap-4">
-      <div>
-        <label class="block text-sm font-medium text-gray-700 mb-1">Stock actual</label>
-        <input type="number" name="stock_actual" value="{{ producto.stock_actual }}"
-          min="0" required
-          class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
+          <div class="mb-3">
+            <label class="form-label">Precio unitario ($)</label>
+            <div class="input-group">
+              <span class="input-group-text" style="background:var(--teal-bg);border-color:#d1d9e6;color:var(--teal);font-weight:700">$</span>
+              <input type="number" name="precio_unitario"
+                value="{% if producto %}{{ producto.precio_unitario|stringformat:'.2f' }}{% endif %}"
+                step="0.01" min="0" required class="form-control" placeholder="0">
+            </div>
+          </div>
+
+          <div class="row g-3 mb-3">
+            <div class="col-6">
+              <label class="form-label">Stock actual</label>
+              <input type="number" name="stock_actual" value="{{ producto.stock_actual }}"
+                min="0" required class="form-control" placeholder="0">
+            </div>
+            <div class="col-6">
+              <label class="form-label">Stock mínimo</label>
+              <input type="number" name="stock_minimo" value="{{ producto.stock_minimo }}"
+                min="0" required class="form-control" placeholder="5">
+              <div class="form-text" style="font-size:.75rem">Alerta cuando baje de este nivel</div>
+            </div>
+          </div>
+
+          <!-- Imagen -->
+          <div class="mb-4">
+            <label class="form-label">Imagen del producto</label>
+
+            {% if producto.imagen %}
+              <div id="current-img" class="mb-2">
+                <div class="img-preview-wrap">
+                  <img src="{{ producto.imagen.url }}" class="img-preview" id="preview-img" alt="{{ producto.nombre }}">
+                  <button type="button" class="img-remove-btn" id="remove-img-btn" title="Quitar imagen">
+                    <i class="bi bi-x-lg"></i>
+                  </button>
+                </div>
+                <p class="mt-1 mb-0" style="font-size:.75rem;color:#99aab8">
+                  <i class="bi bi-image me-1"></i>Imagen actual — sube una nueva para reemplazarla
+                </p>
+              </div>
+            {% else %}
+              <div id="current-img" style="display:none">
+                <div class="img-preview-wrap">
+                  <img src="" class="img-preview" id="preview-img" alt="">
+                  <button type="button" class="img-remove-btn" id="remove-img-btn" title="Quitar imagen">
+                    <i class="bi bi-x-lg"></i>
+                  </button>
+                </div>
+              </div>
+            {% endif %}
+
+            <div class="img-upload-zone" id="upload-zone">
+              <input type="file" name="imagen" id="img-input" accept="image/*">
+              <i class="bi bi-cloud-arrow-up" style="font-size:1.8rem;color:#99aab8;display:block;margin-bottom:8px"></i>
+              <p class="mb-0" style="font-size:.88rem;color:#7a8fa6;font-weight:600">Arrastra una imagen o haz clic para seleccionar</p>
+              <p class="mb-0 mt-1" style="font-size:.75rem;color:#b0bec8">JPG, PNG, WEBP — máx. 5 MB</p>
+            </div>
+          </div>
+
+          <div class="d-flex gap-2">
+            <button type="submit" class="btn btn-teal flex-fill">
+              <i class="bi bi-check-lg me-1"></i>
+              {% if producto %}Guardar cambios{% else %}Crear producto{% endif %}
+            </button>
+            <a href="{% url 'catalogo:lista' %}" class="btn" style="background:#eef1f6;color:var(--navy)">Cancelar</a>
+          </div>
+        </form>
       </div>
-      <div>
-        <label class="block text-sm font-medium text-gray-700 mb-1">Stock mínimo</label>
-        <input type="number" name="stock_minimo" value="{{ producto.stock_minimo }}"
-          min="0" required
-          class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
-      </div>
     </div>
-
-    <div class="flex gap-3 pt-2">
-      <button type="submit"
-        class="bg-blue-700 text-white px-6 py-2 rounded-lg font-medium hover:bg-blue-800 transition">
-        {% if producto %}Guardar cambios{% else %}Crear producto{% endif %}
-      </button>
-      <a href="{% url 'catalogo:lista' %}"
-        class="bg-gray-100 text-gray-700 px-6 py-2 rounded-lg font-medium hover:bg-gray-200 transition">
-        Cancelar
-      </a>
-    </div>
-  </form>
+  </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+var imgInput = document.getElementById('img-input');
+var currentImg = document.getElementById('current-img');
+var previewImg = document.getElementById('preview-img');
+var uploadZone = document.getElementById('upload-zone');
+var removeBtn = document.getElementById('remove-img-btn');
+var borrarInput = document.getElementById('borrar_imagen');
+
+imgInput.addEventListener('change', function(){
+  if(this.files && this.files[0]){
+    var reader = new FileReader();
+    reader.onload = function(e){
+      previewImg.src = e.target.result;
+      currentImg.style.display = 'block';
+      uploadZone.style.display = 'none';
+      borrarInput.value = '0';
+    };
+    reader.readAsDataURL(this.files[0]);
+  }
+});
+
+if(removeBtn){
+  removeBtn.addEventListener('click', function(){
+    currentImg.style.display = 'none';
+    uploadZone.style.display = 'block';
+    imgInput.value = '';
+    borrarInput.value = '1';
+  });
+}
+
+// Drag and drop feedback
+uploadZone.addEventListener('dragover', function(e){ e.preventDefault(); this.classList.add('drag'); });
+uploadZone.addEventListener('dragleave', function(){ this.classList.remove('drag'); });
+uploadZone.addEventListener('drop', function(e){
+  e.preventDefault(); this.classList.remove('drag');
+  if(e.dataTransfer.files.length){ imgInput.files = e.dataTransfer.files; imgInput.dispatchEvent(new Event('change')); }
+});
+
+{% if producto.imagen %}uploadZone.style.display = 'none';{% endif %}
+
+// ── Categoría inline ──
+var toggleCatBtn  = document.getElementById('toggle-nueva-cat');
+var nuevaCatForm  = document.getElementById('nueva-cat-form');
+var nuevaCatInp   = document.getElementById('nueva-cat-inp');
+var crearCatBtn   = document.getElementById('crear-cat-btn');
+var cancelarCatBtn= document.getElementById('cancelar-cat-btn');
+var nuevaCatError = document.getElementById('nueva-cat-error');
+var selCategoria  = document.getElementById('sel-categoria');
+
+toggleCatBtn.addEventListener('click', function(){
+  nuevaCatForm.classList.toggle('d-none');
+  if(!nuevaCatForm.classList.contains('d-none')) nuevaCatInp.focus();
+});
+
+cancelarCatBtn.addEventListener('click', function(){
+  nuevaCatForm.classList.add('d-none');
+  nuevaCatInp.value = '';
+  nuevaCatError.style.display = 'none';
+});
+
+crearCatBtn.addEventListener('click', function(){
+  var nombre = nuevaCatInp.value.trim();
+  if(!nombre){ nuevaCatError.textContent = 'Escribe un nombre para la categoría.'; nuevaCatError.style.display='block'; return; }
+  crearCatBtn.disabled = true;
+  fetch("{% url 'catalogo:categoria_nueva' %}", {
+    method: 'POST',
+    headers: {'Content-Type':'application/x-www-form-urlencoded','X-CSRFToken':'{{ csrf_token }}'},
+    body: 'nombre=' + encodeURIComponent(nombre),
+  })
+  .then(function(r){ return r.json(); })
+  .then(function(data){
+    if(data.error){ nuevaCatError.textContent = data.error; nuevaCatError.style.display='block'; return; }
+    var opt = document.createElement('option');
+    opt.value = data.pk;
+    opt.textContent = data.nombre;
+    opt.selected = true;
+    selCategoria.appendChild(opt);
+    nuevaCatForm.classList.add('d-none');
+    nuevaCatInp.value = '';
+    nuevaCatError.style.display = 'none';
+  })
+  .catch(function(){ nuevaCatError.textContent = 'Error de red. Intenta de nuevo.'; nuevaCatError.style.display='block'; })
+  .finally(function(){ crearCatBtn.disabled = false; });
+});
+</script>
 {% endblock %}

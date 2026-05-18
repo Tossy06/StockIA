@@ -1,46 +1,51 @@
 {% extends "base.html" %}
 {% block title %}Ventas — StockIA{% endblock %}
+{% block page_title %}Ventas{% endblock %}
 
 {% block content %}
-<div class="flex items-center justify-between mb-6">
-  <h1 class="text-2xl font-bold text-gray-800">Ventas</h1>
-  <a href="{% url 'ventas:nueva' %}"
-     class="bg-blue-700 text-white px-4 py-2 rounded-lg hover:bg-blue-800 transition text-sm font-medium">
-    + Nueva venta
+<div class="d-flex align-items-center justify-content-between mb-4">
+  <div>
+    <h4 class="fw-bold mb-0" style="color:var(--navy)">Historial de ventas</h4>
+    <small style="color:#7a8fa6">{{ ventas|length }} venta{{ ventas|length|pluralize:",s" }} registrada{{ ventas|length|pluralize:",s" }}</small>
+  </div>
+  <a href="{% url 'ventas:nueva' %}" class="btn btn-teal btn-sm">
+    <i class="bi bi-plus-lg me-1"></i>Nueva venta
   </a>
 </div>
 
 {% if ventas %}
-<div class="bg-white rounded-xl shadow overflow-hidden">
-  <table class="w-full text-sm">
-    <thead class="bg-gray-50 text-gray-600 uppercase text-xs">
+<div class="t-wrap">
+  <table class="table tbl mb-0">
+    <thead>
       <tr>
-        <th class="px-4 py-3 text-left"># Venta</th>
-        <th class="px-4 py-3 text-left">Fecha</th>
-        <th class="px-4 py-3 text-left">Productos</th>
-        <th class="px-4 py-3 text-right">Total</th>
+        <th>#</th><th>Fecha</th><th>Productos</th><th class="text-end">Total</th>
       </tr>
     </thead>
-    <tbody class="divide-y divide-gray-100">
+    <tbody>
       {% for venta in ventas %}
-      <tr class="hover:bg-gray-50">
-        <td class="px-4 py-3 font-medium text-gray-800">#{{ venta.pk }}</td>
-        <td class="px-4 py-3 text-gray-500">{{ venta.fecha|date:"d/m/Y H:i" }}</td>
-        <td class="px-4 py-3 text-gray-600">
+      <tr>
+        <td class="fw-bold" style="color:var(--navy)">#{{ venta.pk }}</td>
+        <td style="color:#7a8fa6">{{ venta.fecha|date:"d/m/Y H:i" }}</td>
+        <td style="color:#4a5568;font-size:.85rem">
           {% for linea in venta.lineas.all %}
-            {{ linea.cantidad }}x {{ linea.producto.nombre }}{% if not forloop.last %}, {% endif %}
+            {{ linea.cantidad }}× {{ linea.producto.nombre }}{% if not forloop.last %}, {% endif %}
           {% endfor %}
         </td>
-        <td class="px-4 py-3 text-right font-bold text-gray-800">${{ venta.total }}</td>
+        <td class="text-end fw-bold">
+          <span data-precio="{{ venta.total }}">${{ venta.total }}</span>
+        </td>
       </tr>
       {% endfor %}
     </tbody>
   </table>
 </div>
 {% else %}
-<div class="bg-white rounded-xl shadow p-12 text-center text-gray-400">
-  <p class="text-lg mb-4">Aún no hay ventas registradas.</p>
-  <a href="{% url 'ventas:nueva' %}" class="text-blue-700 hover:underline">Registrar la primera</a>
+<div class="card" style="border:2px dashed #d1d9e6!important;box-shadow:none!important;background:transparent!important">
+  <div class="card-body text-center py-5" style="color:#99aab8">
+    <i class="bi bi-receipt" style="font-size:3rem;opacity:.35"></i>
+    <p class="mt-3 mb-2" style="font-size:.95rem">Aún no hay ventas registradas.</p>
+    <a href="{% url 'ventas:nueva' %}" class="btn btn-teal btn-sm">Registrar la primera</a>
+  </div>
 </div>
 {% endif %}
 {% endblock %}

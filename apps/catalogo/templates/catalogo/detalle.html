@@ -1,51 +1,79 @@
 {% extends "base.html" %}
 {% block title %}{{ producto.nombre }} — StockIA{% endblock %}
+{% block page_title %}{{ producto.nombre }}{% endblock %}
 
 {% block content %}
-<div class="max-w-lg mx-auto bg-white rounded-xl shadow p-8">
-  <div class="flex items-center justify-between mb-6">
-    <h1 class="text-2xl font-bold text-gray-800">{{ producto.nombre }}</h1>
-    <span class="text-sm
-      {% if producto.estado_stock == 'critico' %}bg-red-100 text-red-700
-      {% elif producto.estado_stock == 'bajo' %}bg-yellow-100 text-yellow-700
-      {% else %}bg-green-100 text-green-700{% endif %}
-      px-3 py-1 rounded-full font-medium">
-      {{ producto.estado_stock|capfirst }}
-    </span>
+<div class="d-flex align-items-center gap-3 mb-4">
+  <a href="{% url 'catalogo:lista' %}" class="btn btn-sm btn-o-navy"><i class="bi bi-arrow-left"></i></a>
+  <h4 class="fw-bold mb-0" style="color:var(--navy)">{{ producto.nombre }}</h4>
+  {% if producto.estado_stock == "critico" %}
+    <span class="bst bst-c">Crítico</span>
+  {% elif producto.estado_stock == "bajo" %}
+    <span class="bst bst-b">Bajo</span>
+  {% else %}
+    <span class="bst bst-n">Normal</span>
+  {% endif %}
+</div>
+
+<div class="row g-4">
+  <div class="col-md-6">
+    <div class="card h-100">
+      <div class="card-header"><i class="bi bi-info-circle me-2" style="color:var(--teal)"></i>Información del producto</div>
+      <div class="card-body">
+        <dl class="row mb-0" style="row-gap:.5rem">
+          <dt class="col-5 fw-normal" style="font-size:.84rem;color:#7a8fa6">Categoría</dt>
+          <dd class="col-7 fw-semibold mb-0" style="color:var(--navy)">{{ producto.categoria.nombre }}</dd>
+
+          <dt class="col-5 fw-normal" style="font-size:.84rem;color:#7a8fa6">Precio unitario</dt>
+          <dd class="col-7 fw-semibold mb-0" style="color:var(--navy)">
+            <span data-precio="{{ producto.precio_unitario }}">${{ producto.precio_unitario }}</span>
+          </dd>
+
+          <dt class="col-5 fw-normal" style="font-size:.84rem;color:#7a8fa6">Stock actual</dt>
+          <dd class="col-7 fw-semibold mb-0" style="color:var(--navy)">{{ producto.stock_actual }} unidades</dd>
+
+          <dt class="col-5 fw-normal" style="font-size:.84rem;color:#7a8fa6">Stock mínimo</dt>
+          <dd class="col-7 fw-semibold mb-0" style="color:var(--navy)">{{ producto.stock_minimo }} unidades</dd>
+
+          <dt class="col-5 fw-normal" style="font-size:.84rem;color:#7a8fa6">Registrado el</dt>
+          <dd class="col-7 fw-semibold mb-0" style="color:var(--navy)">{{ producto.creado_en|date:"d/m/Y" }}</dd>
+        </dl>
+      </div>
+    </div>
   </div>
 
-  <dl class="space-y-3 text-sm">
-    <div class="flex justify-between">
-      <dt class="text-gray-500">Categoría</dt>
-      <dd class="font-medium text-gray-800">{{ producto.categoria.nombre }}</dd>
+  <div class="col-md-6">
+    <div class="card h-100">
+      <div class="card-header"><i class="bi bi-bar-chart me-2" style="color:var(--teal)"></i>Estado del stock</div>
+      <div class="card-body d-flex flex-column justify-content-center align-items-center gap-3">
+        {% if producto.estado_stock == "critico" %}
+          <div style="width:80px;height:80px;border-radius:50%;background:rgba(220,38,38,.12);display:flex;align-items:center;justify-content:center">
+            <i class="bi bi-exclamation-triangle-fill" style="font-size:2rem;color:#dc3545"></i>
+          </div>
+          <p class="fw-bold mb-0" style="color:#dc3545;font-size:1.1rem">Stock crítico</p>
+          <small style="color:#7a8fa6">Tienes {{ producto.stock_actual }} unidades, mínimo es {{ producto.stock_minimo }}</small>
+        {% elif producto.estado_stock == "bajo" %}
+          <div style="width:80px;height:80px;border-radius:50%;background:rgba(234,179,8,.14);display:flex;align-items:center;justify-content:center">
+            <i class="bi bi-arrow-down-circle-fill" style="font-size:2rem;color:#d97706"></i>
+          </div>
+          <p class="fw-bold mb-0" style="color:#d97706;font-size:1.1rem">Stock bajo</p>
+          <small style="color:#7a8fa6">Considera reabastecer pronto</small>
+        {% else %}
+          <div style="width:80px;height:80px;border-radius:50%;background:var(--teal-bg);display:flex;align-items:center;justify-content:center">
+            <i class="bi bi-check-circle-fill" style="font-size:2rem;color:var(--teal)"></i>
+          </div>
+          <p class="fw-bold mb-0" style="color:var(--teal);font-size:1.1rem">Stock normal</p>
+          <small style="color:#7a8fa6">Todo bien con el inventario</small>
+        {% endif %}
+      </div>
     </div>
-    <div class="flex justify-between">
-      <dt class="text-gray-500">Precio unitario</dt>
-      <dd class="font-medium text-gray-800">${{ producto.precio_unitario }}</dd>
-    </div>
-    <div class="flex justify-between">
-      <dt class="text-gray-500">Stock actual</dt>
-      <dd class="font-medium text-gray-800">{{ producto.stock_actual }} unidades</dd>
-    </div>
-    <div class="flex justify-between">
-      <dt class="text-gray-500">Stock mínimo</dt>
-      <dd class="font-medium text-gray-800">{{ producto.stock_minimo }} unidades</dd>
-    </div>
-    <div class="flex justify-between">
-      <dt class="text-gray-500">Registrado el</dt>
-      <dd class="font-medium text-gray-800">{{ producto.creado_en|date:"d/m/Y" }}</dd>
-    </div>
-  </dl>
-
-  <div class="flex gap-3 mt-8">
-    <a href="{% url 'catalogo:editar' producto.pk %}"
-       class="bg-blue-700 text-white px-5 py-2 rounded-lg text-sm font-medium hover:bg-blue-800 transition">
-      Editar
-    </a>
-    <a href="{% url 'catalogo:lista' %}"
-       class="bg-gray-100 text-gray-700 px-5 py-2 rounded-lg text-sm font-medium hover:bg-gray-200 transition">
-      Volver
-    </a>
   </div>
+</div>
+
+<div class="d-flex gap-2 mt-4">
+  <a href="{% url 'catalogo:editar' producto.pk %}" class="btn btn-teal btn-sm">
+    <i class="bi bi-pencil me-1"></i>Editar
+  </a>
+  <a href="{% url 'catalogo:lista' %}" class="btn btn-sm" style="background:#eef1f6;color:var(--navy)">Volver</a>
 </div>
 {% endblock %}

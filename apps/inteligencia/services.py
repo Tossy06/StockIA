@@ -9,18 +9,62 @@ from mcp_server.tools import ejecutar_herramienta
 
 SYSTEM_PROMPT = """
 Eres un asistente de inventario para una tienda de barrio colombiana.
-Tienes acceso a los datos reales del negocio a través de herramientas.
-Úsalas para responder con datos precisos y actualizados.
-Responde SIEMPRE en español, en lenguaje simple que un tendero entienda.
+Tienes acceso a los datos reales del negocio a través de herramientas. Úsalas SIEMPRE antes de responder.
+Responde SIEMPRE en español, en lenguaje simple y cercano que un tendero colombiano entienda.
 
-Responde ÚNICAMENTE con un objeto JSON válido con esta estructura exacta:
+━━ CÓMO ELEGIR tipo_respuesta ━━
+- "grafica": el usuario pide ver algo visualmente. Señales: "muéstrame", "gráfica", "top", "tendencia",
+  "cómo van", "cuáles son los más", "comparar", "distribución", "ver", "ponme una gráfica".
+- "mixto": útil mostrar explicación + gráfica. Señales: preguntas que piden análisis Y visualización.
+- "texto": respuesta sin visual. Señales: "cuánto", "qué pasó", "por qué", preguntas directas sin comparar.
+
+━━ CÓMO ELEGIR modo_dashboard ━━
+Usa "reemplazar" si el usuario quiere un PANEL COMPLETO con varias métricas.
+Señales de "reemplazar": "dashboard", "panel", "resumen completo", "todo de hoy/semana/mes",
+  "análisis completo", "cómo va todo", "dame un resumen visual", "hazme un panel".
+En este modo usa el campo "graficas" (ARRAY con 2 a 4 gráficas).
+
+Usa "agregar" para UNA sola gráfica puntual (modo por defecto).
+Señales de "agregar": "muéstrame el top", "gráfica de ventas", "cómo van los productos",
+  "ponme la gráfica de", una sola pregunta específica.
+En este modo usa el campo "grafica" (SINGULAR).
+
+━━ query_key: nombre EXACTO de la herramienta usada ━━
+obtener_stock_critico | obtener_ventas_por_periodo | obtener_top_productos | obtener_ingresos | obtener_resumen_negocio
+Si usaste varias herramientas o no aplica, pon null.
+
+━━ ESTRUCTURA JSON — modo "agregar" ━━
 {
-  "tipo_respuesta": "texto | grafica | mixto",
-  "grafica": { "tipo": "bar|line|pie|doughnut", "titulo": "", "labels": [], "datos": [] },
-  "texto": "tu análisis aquí"
+  "tipo_respuesta": "grafica | mixto | texto",
+  "modo_dashboard": "agregar",
+  "grafica": {
+    "tipo": "bar | line | pie | doughnut",
+    "titulo": "título corto y claro",
+    "labels": ["etiqueta1", "etiqueta2"],
+    "datos": [0, 0],
+    "query_key": "nombre_herramienta_o_null",
+    "query_params": {}
+  },
+  "texto": "explicación breve para el tendero"
 }
 
-No incluyas nada fuera del JSON. No uses markdown. Solo el objeto JSON.
+━━ ESTRUCTURA JSON — modo "reemplazar" (panel completo) ━━
+{
+  "tipo_respuesta": "grafica",
+  "modo_dashboard": "reemplazar",
+  "graficas": [
+    { "tipo": "bar", "titulo": "...", "labels": [...], "datos": [...], "query_key": "...", "query_params": {} },
+    { "tipo": "pie", "titulo": "...", "labels": [...], "datos": [...], "query_key": "...", "query_params": {} }
+  ],
+  "texto": "descripción breve del panel"
+}
+
+━━ CUANDO NO HAY DATOS ━━
+Si una herramienta devuelve lista vacía [], total 0, o sin registros:
+- Responde YA con tipo_respuesta "texto". NO sigas llamando herramientas. NO inventes cifras.
+- Ejemplo: {"tipo_respuesta":"texto","texto":"No hay ventas registradas en ese período.","grafica":null}
+
+IMPORTANTE: No incluyas nada fuera del JSON. No uses markdown. Solo el objeto JSON válido.
 """.strip()
 
 # Herramientas en formato Anthropic
@@ -47,7 +91,7 @@ TOOLS_ANTHROPIC = [
         "input_schema": {
             "type": "object",
             "properties": {
-                "limite": {"type": "integer", "default": 5},
+                "limite": {"description": "Cantidad de productos a retornar. Por defecto 5.", "default": 5},
                 "periodo": {"type": "string", "enum": ["dia", "semana", "mes"]},
             },
             "required": [],
@@ -131,39 +175,53 @@ def enviar_mensaje(usuario, texto_usuario: str) -> dict:
     ] + [{"role": "user", "content": texto_usuario}]
 
     if proveedor == "claude":
-        respuesta_json = _llamar_claude(api_key, mensajes_api)
+        respuesta_json = _llamar_claude(api_key, mensajes_api, usuario)
     else:
-        respuesta_json = _llamar_openai_compat(proveedor, api_key, mensajes_api)
+        respuesta_json = _llamar_openai_compat(proveedor, api_key, mensajes_api, usuario)
 
     tipo = respuesta_json.get("tipo_respuesta", "texto")
-    grafica = respuesta_json.get("grafica") if tipo in ("grafica", "mixto") else None
+    modo = respuesta_json.get("modo_dashboard", "agregar")
+    grafica = respuesta_json.get("grafica") or None
+    graficas = respuesta_json.get("graficas") or []
+    datos_guardar = graficas if graficas else grafica
 
     Mensaje.objects.create(
         conversacion=conversacion,
         rol=Mensaje.Rol.ASISTENTE,
         contenido=respuesta_json.get("texto", ""),
         tipo_respuesta=tipo,
-        datos_grafica=grafica,
+        datos_grafica=datos_guardar,
     )
 
-    return {"tipo_respuesta": tipo, "texto": respuesta_json.get("texto", ""), "grafica": grafica}
+    return {
+        "tipo_respuesta": tipo,
+        "modo_dashboard": modo,
+        "texto": respuesta_json.get("texto", ""),
+        "grafica": grafica,
+        "graficas": graficas,
+    }
 
 
-def _llamar_claude(api_key: str, mensajes: list) -> dict:
+def _llamar_claude(api_key: str, mensajes: list, usuario=None) -> dict:
     client = anthropic.Anthropic(api_key=api_key)
+    # Primera llamada: forzar uso de herramienta para consultar datos reales del usuario
+    tool_choice = {"type": "any"}
     while True:
         respuesta = client.messages.create(
             model=MODELOS["claude"],
             max_tokens=2048,
             system=SYSTEM_PROMPT,
             tools=TOOLS_ANTHROPIC,
+            tool_choice=tool_choice,
             messages=mensajes,
         )
+        # Llamadas siguientes: el modelo puede decidir si necesita más datos
+        tool_choice = {"type": "auto"}
         if respuesta.stop_reason == "tool_use":
             tool_results = []
             for bloque in respuesta.content:
                 if bloque.type == "tool_use":
-                    resultado = ejecutar_herramienta(bloque.name, bloque.input)
+                    resultado = ejecutar_herramienta(bloque.name, bloque.input, usuario)
                     tool_results.append({
                         "type": "tool_result",
                         "tool_use_id": bloque.id,
@@ -178,25 +236,31 @@ def _llamar_claude(api_key: str, mensajes: list) -> dict:
         return _parsear_json(texto)
 
 
-def _llamar_openai_compat(proveedor: str, api_key: str, mensajes: list) -> dict:
+def _llamar_openai_compat(proveedor: str, api_key: str, mensajes: list, usuario=None) -> dict:
     client = OpenAI(api_key=api_key, base_url=BASE_URLS[proveedor])
     modelo = MODELOS[proveedor]
     mensajes = [{"role": "system", "content": SYSTEM_PROMPT}] + mensajes
+    primera_llamada = True
 
     while True:
-        respuesta = client.chat.completions.create(
-            model=modelo,
-            messages=mensajes,
-            tools=TOOLS_OPENAI,
-            tool_choice="auto",
-        )
+        kwargs = {"model": modelo, "messages": mensajes, "tools": TOOLS_OPENAI}
+        if primera_llamada:
+            # Groq y Gemini soportan "required"; Ollama puede no soportarlo — intentamos y hacemos fallback
+            try:
+                respuesta = client.chat.completions.create(**kwargs, tool_choice="required")
+            except Exception:
+                respuesta = client.chat.completions.create(**kwargs, tool_choice="auto")
+        else:
+            respuesta = client.chat.completions.create(**kwargs, tool_choice="auto")
+        primera_llamada = False
+
         mensaje = respuesta.choices[0].message
 
         if mensaje.tool_calls:
             mensajes.append(mensaje)
             for tool_call in mensaje.tool_calls:
                 args = json.loads(tool_call.function.arguments)
-                resultado = ejecutar_herramienta(tool_call.function.name, args)
+                resultado = ejecutar_herramienta(tool_call.function.name, args, usuario)
                 mensajes.append({
                     "role": "tool",
                     "tool_call_id": tool_call.id,
@@ -208,10 +272,32 @@ def _llamar_openai_compat(proveedor: str, api_key: str, mensajes: list) -> dict:
 
 
 def _parsear_json(texto: str) -> dict:
+    import re
+    texto = texto.strip()
+
+    # 1. Extrae JSON de bloque markdown ```json ... ``` (Groq a veces lo incluye)
+    m = re.search(r'```(?:json)?\s*(\{[\s\S]*?\})\s*```', texto)
+    if m:
+        texto = m.group(1).strip()
+
+    # 2. Intento directo
     try:
         return json.loads(texto)
     except json.JSONDecodeError:
-        return {"tipo_respuesta": "texto", "texto": texto, "grafica": None}
+        pass
+
+    # 3. Extrae el primer objeto JSON del texto (maneja prefijos como <function-null>)
+    inicio = texto.find("{")
+    fin = texto.rfind("}") + 1
+    if inicio != -1 and fin > inicio:
+        try:
+            return json.loads(texto[inicio:fin])
+        except json.JSONDecodeError:
+            pass
+
+    # 4. Fallback: devuelve el texto limpio sin artefactos del modelo
+    texto_limpio = re.sub(r'<[^>]+>', '', texto).strip()
+    return {"tipo_respuesta": "texto", "texto": texto_limpio or texto, "grafica": None}
 
 
 def obtener_historial(usuario) -> list:

@@ -1,0 +1,225 @@
+<!-- StockIA Chat Widget -->
+<style>
+  #cw{position:fixed;bottom:24px;right:24px;z-index:1200;display:flex;flex-direction:column;align-items:flex-end;gap:12px}
+  #cw-panel{width:390px;background:#fff;border-radius:20px;box-shadow:0 16px 48px rgba(5,42,69,.22);display:flex;flex-direction:column;overflow:hidden;height:520px;display:none}
+  #cw-panel.open{display:flex}
+  #cw-head{background:linear-gradient(135deg,var(--navy) 0%,#0a4a7a 100%);padding:14px 16px;display:flex;align-items:center;gap:10px;flex-shrink:0}
+  .cw-av{width:34px;height:34px;border-radius:50%;background:var(--lime);display:flex;align-items:center;justify-content:center;flex-shrink:0}
+  .cw-av i{color:var(--navy);font-size:1rem}
+  .cw-htxt{flex:1}
+  .cw-htxt strong{display:block;color:#fff;font-size:.9rem;font-weight:700}
+  .cw-htxt span{color:rgba(255,255,255,.55);font-size:.72rem}
+  .cw-actions{display:flex;align-items:center;gap:6px}
+  .cw-act-btn{background:rgba(255,255,255,.15);border:none;color:rgba(255,255,255,.8);border-radius:7px;padding:5px 10px;font-size:.75rem;cursor:pointer;transition:background .15s}
+  .cw-act-btn:hover{background:rgba(255,255,255,.28);color:#fff}
+  #cw-msgs{flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:10px;background:#f8f9fc}
+  #cw-msgs::-webkit-scrollbar{width:4px}
+  #cw-msgs::-webkit-scrollbar-track{background:transparent}
+  #cw-msgs::-webkit-scrollbar-thumb{background:rgba(5,42,69,.15);border-radius:4px}
+  .msg-u{display:flex;justify-content:flex-end}
+  .msg-u .bubble{background:var(--teal);color:#fff;border-radius:16px 16px 4px 16px;padding:9px 13px;max-width:82%;font-size:.875rem;line-height:1.45;word-break:break-word}
+  .msg-b{display:flex;align-items:flex-end;gap:7px}
+  .msg-b .bot-av{width:24px;height:24px;border-radius:50%;background:var(--navy);display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-bottom:2px}
+  .msg-b .bot-av i{color:var(--lime);font-size:.65rem}
+  .msg-b .bubble{background:#fff;color:#1a2535;border-radius:16px 16px 16px 4px;padding:9px 13px;max-width:82%;font-size:.875rem;line-height:1.45;word-break:break-word;box-shadow:0 1px 4px rgba(5,42,69,.09);white-space:pre-wrap}
+  .msg-b .bubble.err{background:#fff1f1;color:#a31919;box-shadow:0 1px 4px rgba(220,38,38,.12)}
+  .msg-info{text-align:center;font-size:.72rem;color:#99aab8;padding:2px 0}
+  .ch-card{background:#fff;border-radius:12px;border:1px solid #e8edf3;padding:12px;margin-top:4px;width:100%}
+  .ch-card .ch-ttl{font-size:.75rem;color:#7a8fa6;margin-bottom:8px;font-weight:600}
+  .ch-card canvas{max-width:100%}
+  .cw-chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:4px}
+  .cw-chip{font-size:.75rem;padding:5px 12px;border-radius:20px;border:1.5px solid;font-weight:600;cursor:pointer;transition:all .15s}
+  .cw-chip.add{border-color:var(--teal);color:var(--teal);background:var(--teal-bg)}
+  .cw-chip.add:hover{background:var(--teal);color:#fff}
+  .cw-chip.view{border-color:var(--navy);color:var(--navy);background:var(--navy-bg)}
+  .cw-chip.view:hover{background:var(--navy);color:#fff}
+  .typing{display:flex;align-items:flex-end;gap:7px}
+  .typing .bot-av{width:24px;height:24px;border-radius:50%;background:var(--navy);display:flex;align-items:center;justify-content:center;flex-shrink:0}
+  .typing .bot-av i{color:var(--lime);font-size:.65rem}
+  .typing .dots{background:#fff;border-radius:16px;padding:10px 14px;display:flex;gap:4px;box-shadow:0 1px 4px rgba(5,42,69,.09)}
+  .typing .dot{width:7px;height:7px;border-radius:50%;background:#bcc8d4;animation:bounce .9s infinite}
+  .typing .dot:nth-child(2){animation-delay:.15s}
+  .typing .dot:nth-child(3){animation-delay:.3s}
+  @keyframes bounce{0%,80%,100%{transform:translateY(0)}40%{transform:translateY(-6px)}}
+  #cw-foot{padding:12px 14px;background:#fff;border-top:1px solid #eef0f5;display:flex;gap:8px;flex-shrink:0}
+  #cw-in{flex:1;border:1.5px solid #d1d9e6;border-radius:10px;padding:9px 13px;font-size:.875rem;outline:none;transition:border-color .15s;resize:none;height:42px;font-family:inherit}
+  #cw-in:focus{border-color:var(--teal)}
+  #cw-send{background:var(--navy);border:none;color:#fff;width:42px;height:42px;border-radius:10px;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:background .15s;flex-shrink:0}
+  #cw-send:hover{background:var(--teal)}
+  #cw-send:disabled{background:#bcc8d4;cursor:not-allowed}
+  #cw-btn{width:52px;height:52px;background:var(--navy);border:none;border-radius:50%;box-shadow:0 6px 20px rgba(5,42,69,.35);display:flex;align-items:center;justify-content:center;cursor:pointer;transition:transform .2s,background .2s;position:relative}
+  #cw-btn:hover{transform:scale(1.08);background:var(--teal)}
+  #cw-btn i{color:var(--lime);font-size:1.3rem}
+  #cw-badge{display:none;position:absolute;top:-4px;right:-4px;width:20px;height:20px;background:#e53e3e;color:#fff;border-radius:50%;font-size:.65rem;font-weight:700;align-items:center;justify-content:center}
+  #cw-badge.show{display:flex}
+</style>
+
+<div id="cw">
+  <div id="cw-panel">
+    <div id="cw-head">
+      <div class="cw-av"><i class="bi bi-stars"></i></div>
+      <div class="cw-htxt">
+        <strong>Asistente StockIA</strong>
+        <span>Con IA · Datos en tiempo real</span>
+      </div>
+      <div class="cw-actions">
+        <button class="cw-act-btn" id="cw-clear"><i class="bi bi-trash3"></i> Limpiar</button>
+        <button class="cw-act-btn" id="cw-close"><i class="bi bi-x-lg"></i></button>
+      </div>
+    </div>
+    <div id="cw-msgs"></div>
+    <div id="cw-foot">
+      <input id="cw-in" type="text" placeholder="Pregunta sobre tu inventario…">
+      <button id="cw-send"><i class="bi bi-send-fill" style="font-size:.85rem"></i></button>
+    </div>
+  </div>
+  <button id="cw-btn" aria-label="Abrir asistente IA">
+    <i class="bi bi-stars"></i>
+    <span id="cw-badge"></span>
+  </button>
+</div>
+
+<script>
+(function(){
+  var CHART_C=['rgba(51,166,121,.8)','rgba(5,42,69,.8)','rgba(225,239,21,.85)','rgba(10,127,203,.8)','rgba(230,126,34,.8)','rgba(155,89,182,.8)'];
+  var loaded=false,unread=0,chartN=0;
+  var panel=document.getElementById('cw-panel'),
+      msgs=document.getElementById('cw-msgs'),
+      inp=document.getElementById('cw-in'),
+      send=document.getElementById('cw-send'),
+      badge=document.getElementById('cw-badge'),
+      btn=document.getElementById('cw-btn');
+
+  document.getElementById('cw-btn').addEventListener('click',function(){
+    var op=panel.classList.toggle('open');
+    if(op){unread=0;badge.classList.remove('show');badge.textContent='';if(!loaded)cargar();else{inp.focus();msgs.scrollTop=msgs.scrollHeight;}}
+  });
+  document.getElementById('cw-close').addEventListener('click',function(){panel.classList.remove('open');});
+  document.getElementById('cw-clear').addEventListener('click',function(){
+    if(!confirm('¿Limpiar el historial?'))return;
+    fetch('/inteligencia/limpiar/',{method:'POST',headers:{'X-CSRFToken':csrf(),'Accept':'application/json'}})
+    .then(function(){msgs.innerHTML='';infoMsg('Historial limpiado.');});
+  });
+  inp.addEventListener('keydown',function(e){if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();enviar();}});
+  send.addEventListener('click',enviar);
+
+  function cargar(){
+    fetch('/inteligencia/historial/').then(r=>r.json()).then(function(d){
+      loaded=true;
+      var list=d.mensajes||[];
+      if(!list.length){infoMsg('Hola 👋 Pregúntame sobre tu inventario, ventas o ingresos.');}
+      else{
+        list.forEach(function(m){
+          if(m.rol==='usuario')msgU(m.contenido);
+          else{
+            if(m.contenido)msgB(m.contenido);
+            if(m.datos_grafica){
+              var arr=Array.isArray(m.datos_grafica)?m.datos_grafica:[m.datos_grafica];
+              arr.forEach(renderChart);
+            }
+          }
+        });
+      }
+      inp.focus();msgs.scrollTop=msgs.scrollHeight;
+    }).catch(function(){loaded=true;infoMsg('Hola 👋 Pregúntame sobre tu inventario.');inp.focus();});
+  }
+
+  function enviar(){
+    var txt=inp.value.trim();if(!txt)return;
+    inp.value='';msgU(txt);setBusy(true);
+    var loader=addLoader();
+    fetch('/inteligencia/mensaje/',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':csrf()},body:JSON.stringify({texto:txt})})
+    .then(r=>r.json()).then(function(d){
+      loader.remove();
+      if(d.error){msgB(d.error,true);}
+      else{procesarResp(d);if(!panel.classList.contains('open')){unread++;badge.textContent=unread;badge.classList.add('show');}}
+    }).catch(function(){loader.remove();msgB('Error de conexión. Intenta de nuevo.',true);})
+    .finally(function(){setBusy(false);});
+  }
+
+  function procesarResp(d){
+    if(d.texto)msgB(d.texto);
+    var modo=d.modo_dashboard||'agregar';
+    if(modo==='reemplazar'&&d.graficas&&d.graficas.length){
+      d.graficas.forEach(renderChart);btnVista(d.graficas);
+    }else if(d.grafica){
+      renderChart(d.grafica);btnAgregar(d.grafica);
+    }
+    msgs.scrollTop=msgs.scrollHeight;
+  }
+
+  function btnAgregar(g){
+    var w=document.createElement('div');w.className='cw-chips';
+    var b=chip('+ Agregar al dashboard','add');
+    b.addEventListener('click',function(){
+      w.remove();infoMsg('Guardando…');
+      fetch('/inventario/graficas/',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':csrf()},body:JSON.stringify(g)})
+      .then(r=>r.json()).then(function(res){
+        if(res.error){infoMsg('⚠ '+res.error);return;}
+        var enD=location.pathname.startsWith('/inventario');
+        if(enD){infoMsg('✓ Gráfica agregada.');document.dispatchEvent(new CustomEvent('stockia:nueva_grafica',{detail:res}));}
+        else{infoMsg('✓ Guardada. Ve al dashboard para verla.');}
+      }).catch(function(){infoMsg('Error al guardar.');});
+    });
+    w.appendChild(b);msgs.appendChild(w);msgs.scrollTop=msgs.scrollHeight;
+  }
+
+  function btnVista(graficas){
+    var w=document.createElement('div');w.className='cw-chips';
+    var b=chip('Ver en el dashboard','view');
+    b.addEventListener('click',function(){
+      w.remove();
+      fetch('/inventario/vistas/',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':csrf()},body:JSON.stringify({graficas:graficas})})
+      .then(r=>r.json()).then(function(v){
+        infoMsg('Vista guardada: "'+( v.nombre||'Dashboard IA')+'"');
+        var enD=location.pathname.startsWith('/inventario');
+        if(enD){document.dispatchEvent(new CustomEvent('stockia:reemplazar_dashboard',{detail:graficas}));panel.classList.remove('open');}
+        else{sessionStorage.setItem('stockia_vista_pendiente',JSON.stringify(graficas));location.href='/inventario/';}
+      });
+    });
+    w.appendChild(b);msgs.appendChild(w);msgs.scrollTop=msgs.scrollHeight;
+  }
+
+  function renderChart(g){
+    if(!g||!g.labels||!g.labels.length)return;
+    chartN++;var id='cwc-'+chartN;
+    var polar=g.tipo==='pie'||g.tipo==='doughnut';
+    var d=document.createElement('div');
+    d.innerHTML='<div class="ch-card"><div class="ch-ttl">'+esc(g.titulo||'Gráfica')+'</div><canvas id="'+id+'" height="140"></canvas></div>';
+    msgs.appendChild(d);
+    if(window.Chart){
+      new Chart(document.getElementById(id),{
+        type:g.tipo||'bar',
+        data:{labels:g.labels,datasets:[{label:g.titulo||'',data:g.datos||[],backgroundColor:polar?CHART_C:CHART_C[0],borderRadius:polar?0:5,borderWidth:0}]},
+        options:{responsive:true,maintainAspectRatio:true,plugins:{legend:{display:polar,position:'bottom',labels:{boxWidth:10,font:{size:10}}}},scales:polar?{}:{y:{beginAtZero:true,ticks:{font:{size:10}}}}}
+      });
+    }
+  }
+
+  function chip(txt,cls){
+    var b=document.createElement('button');b.className='cw-chip '+cls;b.textContent=txt;return b;
+  }
+  function msgU(txt){
+    var d=document.createElement('div');d.className='msg-u';
+    d.innerHTML='<div class="bubble">'+esc(txt)+'</div>';
+    msgs.appendChild(d);msgs.scrollTop=msgs.scrollHeight;
+  }
+  function msgB(txt,isErr){
+    var d=document.createElement('div');d.className='msg-b';
+    d.innerHTML='<div class="bot-av"><i class="bi bi-stars"></i></div><div class="bubble'+(isErr?' err':'')+'">'+esc(txt)+'</div>';
+    msgs.appendChild(d);msgs.scrollTop=msgs.scrollHeight;
+  }
+  function infoMsg(txt){
+    var p=document.createElement('div');p.className='msg-info';p.textContent=txt;
+    msgs.appendChild(p);msgs.scrollTop=msgs.scrollHeight;
+  }
+  function addLoader(){
+    var d=document.createElement('div');d.className='typing';
+    d.innerHTML='<div class="bot-av"><i class="bi bi-stars"></i></div><div class="dots"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>';
+    msgs.appendChild(d);msgs.scrollTop=msgs.scrollHeight;return d;
+  }
+  function setBusy(on){send.disabled=on;inp.disabled=on;if(!on)inp.focus();}
+  function csrf(){var c=document.cookie.split(';').find(s=>s.trim().startsWith('csrftoken='));return c?decodeURIComponent(c.split('=')[1]):'';}
+  function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+})();
+</script>
