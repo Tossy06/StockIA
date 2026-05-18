@@ -135,7 +135,7 @@ Recomendaciones minimas:
 4. Configurar DATABASE_URL.
 5. Ejecutar collectstatic antes de publicar (si aplica en tu plataforma).
 
-## Solucion de problemas rapida
+## Solucion de problemas rapida.
 
 - Error de conexion a PostgreSQL:
   - Verifica que el servicio este activo.
