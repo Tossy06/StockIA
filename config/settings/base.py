@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 from decouple import config
 import dj_database_url
@@ -5,9 +6,11 @@ import dj_database_url
 # config/settings/base.py está 3 niveles abajo de la raíz del proyecto
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 
-SECRET_KEY = config("SECRET_KEY")
+# Leemos SECRET_KEY y FERNET_KEY directo de os.environ para evitar
+# que python-decouple los busque en archivos .env inexistentes en producción
+SECRET_KEY = os.environ.get("SECRET_KEY") or config("SECRET_KEY")
 DEBUG = config("DEBUG", default=False, cast=bool)
-ALLOWED_HOSTS = config("ALLOWED_HOSTS", default="").split(",")
+ALLOWED_HOSTS = config("ALLOWED_HOSTS", default="*").split(",")
 
 DJANGO_APPS = [
     "django.contrib.admin",
@@ -60,7 +63,7 @@ WSGI_APPLICATION = "config.wsgi.application"
 
 # Base de datos — Railway inyecta DATABASE_URL automáticamente
 DATABASES = {
-    "default": dj_database_url.config(default=config("DATABASE_URL", default=""))
+    "default": dj_database_url.config(default=os.environ.get("DATABASE_URL", ""))
 }
 
 AUTH_PASSWORD_VALIDATORS = [
@@ -91,5 +94,5 @@ LOGIN_REDIRECT_URL = "/inventario/"
 LOGOUT_REDIRECT_URL = "/identidad/login/"
 
 # Variables propias del proyecto
-FERNET_KEY = config("FERNET_KEY").encode()
-ANTHROPIC_MODEL = config("ANTHROPIC_MODEL", default="claude-sonnet-4-5")
+FERNET_KEY = (os.environ.get("FERNET_KEY") or config("FERNET_KEY")).encode()
+ANTHROPIC_MODEL = os.environ.get("ANTHROPIC_MODEL", "claude-sonnet-4-5")
