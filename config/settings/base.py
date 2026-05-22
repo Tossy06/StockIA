@@ -11,6 +11,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent.parent
 SECRET_KEY = os.environ.get("SECRET_KEY") or config("SECRET_KEY", default="django-insecure-change-this-in-production-please")
 DEBUG = config("DEBUG", default=False, cast=bool)
 ALLOWED_HOSTS = config("ALLOWED_HOSTS", default="*").split(",")
+CSRF_TRUSTED_ORIGINS = ["https://stockia-production-4052.up.railway.app"]
 
 DJANGO_APPS = [
     "django.contrib.admin",
