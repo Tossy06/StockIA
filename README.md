@@ -147,4 +147,4 @@ Recomendaciones minimas:
 
 ## Licencia
 
-Uso interno del proyecto.
+Uso interno del proyecto..
