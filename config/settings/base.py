@@ -8,7 +8,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent.parent
 
 # Leemos SECRET_KEY y FERNET_KEY directo de os.environ para evitar
 # que python-decouple los busque en archivos .env inexistentes en producción
-SECRET_KEY = os.environ.get("SECRET_KEY") or config("SECRET_KEY")
+SECRET_KEY = os.environ.get("SECRET_KEY") or config("SECRET_KEY", default="django-insecure-change-this-in-production-please")
 DEBUG = config("DEBUG", default=False, cast=bool)
 ALLOWED_HOSTS = config("ALLOWED_HOSTS", default="*").split(",")
 
