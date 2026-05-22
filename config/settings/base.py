@@ -94,5 +94,5 @@ LOGIN_REDIRECT_URL = "/inventario/"
 LOGOUT_REDIRECT_URL = "/identidad/login/"
 
 # Variables propias del proyecto
-FERNET_KEY = (os.environ.get("FERNET_KEY") or config("FERNET_KEY")).encode()
+FERNET_KEY = os.environ["FERNET_KEY"].encode()
 ANTHROPIC_MODEL = os.environ.get("ANTHROPIC_MODEL", "claude-sonnet-4-5")
