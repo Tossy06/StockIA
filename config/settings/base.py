@@ -82,10 +82,26 @@ USE_TZ = True
 STATIC_URL = "/static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
 STATICFILES_DIRS = [BASE_DIR / "static"]
-STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
 
 MEDIA_URL = "/media/"
 MEDIA_ROOT = BASE_DIR / "media"
+
+# ── Almacenamiento de archivos ────────────────────────────────────────────────
+# En producción (Railway) se usa Cloudinary para persistir las imágenes entre deploys.
+# En local sin CLOUDINARY_URL se usa el filesystem normal.
+_CLOUDINARY_URL = os.environ.get("CLOUDINARY_URL", "")
+if _CLOUDINARY_URL:
+    INSTALLED_APPS += ["cloudinary", "cloudinary_storage"]
+    CLOUDINARY_STORAGE = {"CLOUDINARY_URL": _CLOUDINARY_URL}
+    STORAGES = {
+        "default": {"BACKEND": "cloudinary_storage.storage.MediaCloudinaryStorage"},
+        "staticfiles": {"BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage"},
+    }
+else:
+    STORAGES = {
+        "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
+        "staticfiles": {"BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage"},
+    }
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 

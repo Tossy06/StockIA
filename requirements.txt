@@ -9,3 +9,6 @@ mcp[cli]
 gunicorn==22.0.0
 dj-database-url==2.1.0
 Pillow>=10.0.0
+django-storages>=1.14
+cloudinary>=1.36
+django-cloudinary-storage>=0.3.0

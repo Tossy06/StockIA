@@ -340,21 +340,7 @@ def enviar_mensaje(usuario, texto_usuario: str) -> dict:
         else:
             respuesta_json = _llamar_openai_compat(proveedor, api_key, mensajes_api, usuario, prompt_con_fecha)
     except Exception as e:
-        err_str = str(e).lower()
-        if "rate_limit" in err_str or "429" in err_str or "tokens per day" in err_str or "tokens per minute" in err_str:
-            msg = "Alcanzaste el límite diario de la API de Groq. Espera unos minutos e intenta de nuevo, o revisa tu plan en console.groq.com."
-        elif "401" in err_str or "invalid api key" in err_str or "authentication" in err_str:
-            msg = "La API key no es válida. Ve a 'Mi cuenta' y verifica tu clave de Groq."
-        elif "400" in err_str:
-            msg = "Hubo un error procesando la consulta. Intenta reformular la pregunta."
-        else:
-            msg = f"Error al conectar con el asistente: {str(e)}"
-        respuesta_json = {
-            "tipo_respuesta": "texto",
-            "modo_dashboard": "agregar",
-            "texto": msg,
-            "grafica": None,
-        }
+        respuesta_json = _manejar_error_ia(e, proveedor)
 
     tipo = respuesta_json.get("tipo_respuesta", "texto")
     modo = respuesta_json.get("modo_dashboard", "agregar")
@@ -376,6 +362,89 @@ def enviar_mensaje(usuario, texto_usuario: str) -> dict:
         "texto": respuesta_json.get("texto", ""),
         "grafica": grafica,
         "graficas": graficas,
+    }
+
+
+def _manejar_error_ia(e: Exception, proveedor: str) -> dict:
+    """Convierte cualquier excepción de la API de IA en un mensaje amigable en español."""
+    nombres = {
+        "claude": "Claude (Anthropic)",
+        "groq": "Groq",
+        "gemini": "Gemini (Google)",
+        "ollama": "Ollama",
+    }
+    nombre = nombres.get(proveedor, proveedor.capitalize())
+    err = str(e).lower()
+
+    # ── Rate limit (429) ──────────────────────────────────────────────────────
+    if any(x in err for x in ("rate_limit", "429", "quota", "too many requests",
+                               "tokens per day", "tokens per minute",
+                               "requests per day", "requests per minute")):
+        if "tokens per day" in err or "daily" in err:
+            msg = (f"Alcanzaste el límite diario de tokens de {nombre}. "
+                   "Espera hasta mañana o actualiza tu plan.")
+        elif "tokens per minute" in err:
+            msg = f"Demasiadas solicitudes en poco tiempo a {nombre}. Espera un minuto e intenta de nuevo."
+        else:
+            msg = (f"Límite de uso alcanzado en {nombre}. "
+                   "Espera unos minutos e intenta de nuevo.")
+
+    # ── API key inválida / sin permisos (401, 403) ────────────────────────────
+    elif any(x in err for x in ("401", "403", "invalid api key", "invalid_api_key",
+                                 "authentication", "unauthorized", "permission denied",
+                                 "forbidden", "incorrect api key")):
+        msg = (f"La API key de {nombre} no es válida o expiró. "
+               "Ve a 'Mi cuenta' y actualiza tu clave.")
+
+    # ── Ollama no está corriendo ──────────────────────────────────────────────
+    elif proveedor == "ollama" and any(x in err for x in (
+            "connection refused", "cannot connect", "econnrefused",
+            "failed to connect", "connection error")):
+        msg = ("Ollama no está corriendo en tu máquina. "
+               "Abre la aplicación Ollama y asegúrate de que el modelo esté descargado.")
+
+    # ── Error de red / timeout ────────────────────────────────────────────────
+    elif any(x in err for x in ("connection", "timeout", "timed out",
+                                 "network", "unreachable", "name or service not known",
+                                 "failed to establish", "remotedisconnected")):
+        msg = (f"No se pudo conectar a {nombre}. "
+               "Verifica tu conexión a internet e intenta de nuevo.")
+
+    # ── Servicio sobrecargado / no disponible (503, 529) ─────────────────────
+    elif any(x in err for x in ("503", "529", "overloaded", "service unavailable",
+                                 "temporarily unavailable")):
+        msg = (f"{nombre} está temporalmente saturado. "
+               "Espera unos minutos e intenta de nuevo.")
+
+    # ── Error interno del servidor (500) ──────────────────────────────────────
+    elif any(x in err for x in ("500", "internal server error")):
+        msg = f"Error interno en {nombre}. Intenta de nuevo en un momento."
+
+    # ── Request malformado (400) — normalmente ya resuelto por retry ──────────
+    elif "400" in err or "bad request" in err:
+        msg = "No pude procesar esa consulta. Intenta reformular la pregunta."
+
+    # ── Modelo no encontrado ──────────────────────────────────────────────────
+    elif any(x in err for x in ("model not found", "model_not_found",
+                                 "does not exist", "no such model")):
+        msg = (f"El modelo configurado para {nombre} no existe o no está disponible. "
+               "Revisa la configuración en 'Mi cuenta'.")
+
+    # ── Clave agotada / sin créditos ──────────────────────────────────────────
+    elif any(x in err for x in ("insufficient_quota", "billing", "credit",
+                                 "payment", "out of credits")):
+        msg = (f"Tu cuenta de {nombre} no tiene créditos suficientes. "
+               "Revisa tu plan de facturación.")
+
+    # ── Error desconocido ────────────────────────────────────────────────────
+    else:
+        msg = f"Error inesperado al usar {nombre}. Detalle: {str(e)[:120]}"
+
+    return {
+        "tipo_respuesta": "texto",
+        "modo_dashboard": "agregar",
+        "texto": msg,
+        "grafica": None,
     }
 
 
