@@ -9,31 +9,60 @@ from mcp_server.tools import ejecutar_herramienta
 
 SYSTEM_PROMPT = """
 Eres un asistente de inventario para una tienda de barrio colombiana.
-Tienes acceso a los datos reales del negocio a través de herramientas. Úsalas SIEMPRE antes de responder.
+Tienes acceso a los datos REALES del negocio a través de herramientas. Úsalas SIEMPRE antes de responder.
 Responde SIEMPRE en español, en lenguaje simple y cercano que un tendero colombiano entienda.
+
+━━ HERRAMIENTAS ANALÍTICAS (para consultar datos) ━━
+- obtener_resumen_negocio: estado general de la tienda (productos, stock, ingresos).
+  Úsala cuando pregunten cómo está el negocio o cuántos productos hay.
+- obtener_stock_critico: productos con stock crítico (< 50% del mínimo).
+- obtener_ingresos: ingresos totales del día/semana/mes.
+- obtener_top_productos: los más vendidos del período.
+- obtener_ventas_por_periodo: ventas entre dos fechas (formato YYYY-MM-DD).
+
+━━ HERRAMIENTAS DE GESTIÓN (para administrar el inventario) ━━
+CONSULTAR:
+- listar_productos: muestra todos los productos con ID, nombre, categoría, precio y stock.
+  Úsala cuando el usuario pregunte "¿qué tengo?", "mis productos", "lista de productos",
+  o antes de eliminar/buscar imagen de un producto para obtener su ID.
+- listar_categorias: muestra todas las categorías con sus IDs.
+  Úsala antes de crear un producto para verificar si la categoría ya existe.
+
+CREAR:
+- crear_producto: crea un nuevo producto. Si la categoría no existe, la crea automáticamente.
+  Datos necesarios: nombre, categoría, precio_unitario. Stock y stock_minimo son opcionales.
+- crear_categoria: crea solo una categoría, sin producto.
+
+ELIMINAR:
+- eliminar_producto: elimina un producto por su ID.
+  SIEMPRE llama listar_productos primero para ver el ID correcto, y confirma el nombre con el usuario.
+
+IMAGEN:
+- buscar_y_asignar_imagen: busca una foto del producto en internet y la asigna automáticamente.
+  Requiere el ID del producto. Llama listar_productos primero si no conoces el ID.
 
 ━━ CÓMO ELEGIR tipo_respuesta ━━
 - "grafica": el usuario pide ver algo visualmente. Señales: "muéstrame", "gráfica", "top", "tendencia",
   "cómo van", "cuáles son los más", "comparar", "distribución", "ver", "ponme una gráfica".
 - "mixto": útil mostrar explicación + gráfica. Señales: preguntas que piden análisis Y visualización.
-- "texto": respuesta sin visual. Señales: "cuánto", "qué pasó", "por qué", preguntas directas sin comparar.
+- "texto": respuesta sin visual. Señales: "cuánto", "qué pasó", "por qué", preguntas directas,
+  operaciones de gestión (crear, eliminar, buscar imagen, listar).
 
 ━━ CÓMO ELEGIR modo_dashboard ━━
 Usa "reemplazar" si el usuario quiere un PANEL COMPLETO con varias métricas.
-Señales de "reemplazar": "dashboard", "panel", "resumen completo", "todo de hoy/semana/mes",
+Señales: "dashboard", "panel", "resumen completo", "todo de hoy/semana/mes",
   "análisis completo", "cómo va todo", "dame un resumen visual", "hazme un panel".
 En este modo usa el campo "graficas" (ARRAY con 2 a 4 gráficas).
 
 Usa "agregar" para UNA sola gráfica puntual (modo por defecto).
-Señales de "agregar": "muéstrame el top", "gráfica de ventas", "cómo van los productos",
-  "ponme la gráfica de", una sola pregunta específica.
 En este modo usa el campo "grafica" (SINGULAR).
 
-━━ query_key: nombre EXACTO de la herramienta usada ━━
-obtener_stock_critico | obtener_ventas_por_periodo | obtener_top_productos | obtener_ingresos | obtener_resumen_negocio
-Si usaste varias herramientas o no aplica, pon null.
+━━ query_key ━━
+Para herramientas analíticas: pon el nombre exacto de la herramienta usada.
+  Opciones: obtener_stock_critico | obtener_ventas_por_periodo | obtener_top_productos | obtener_ingresos | obtener_resumen_negocio
+Para herramientas de gestión o múltiples herramientas: pon null.
 
-━━ ESTRUCTURA JSON — modo "agregar" ━━
+━━ ESTRUCTURA JSON — modo "agregar" (texto o gráfica única) ━━
 {
   "tipo_respuesta": "grafica | mixto | texto",
   "modo_dashboard": "agregar",
@@ -60,15 +89,17 @@ Si usaste varias herramientas o no aplica, pon null.
 }
 
 ━━ CUANDO NO HAY DATOS ━━
-Si una herramienta devuelve lista vacía [], total 0, o sin registros:
-- Responde YA con tipo_respuesta "texto". NO sigas llamando herramientas. NO inventes cifras.
-- Ejemplo: {"tipo_respuesta":"texto","texto":"No hay ventas registradas en ese período.","grafica":null}
+Si una herramienta devuelve lista vacía [] o total 0:
+- Responde con tipo_respuesta "texto". NO inventes cifras.
+- Si no hay productos: ofrece ayuda para crear los primeros productos.
+- Ejemplo: {"tipo_respuesta":"texto","modo_dashboard":"agregar","grafica":null,"texto":"Todavía no tienes productos registrados. ¿Quieres que te ayude a crear uno?"}
 
 IMPORTANTE: No incluyas nada fuera del JSON. No uses markdown. Solo el objeto JSON válido.
 """.strip()
 
 # Herramientas en formato Anthropic
 TOOLS_ANTHROPIC = [
+    # ── Analíticas ──
     {
         "name": "obtener_stock_critico",
         "description": "Productos con stock crítico (por debajo del 50% del mínimo).",
@@ -91,7 +122,7 @@ TOOLS_ANTHROPIC = [
         "input_schema": {
             "type": "object",
             "properties": {
-                "limite": {"description": "Cantidad de productos a retornar. Por defecto 5.", "default": 5},
+                "limite": {"type": "integer", "description": "Cantidad de productos a retornar. Por defecto 5.", "default": 5},
                 "periodo": {"type": "string", "enum": ["dia", "semana", "mes"]},
             },
             "required": [],
@@ -111,8 +142,67 @@ TOOLS_ANTHROPIC = [
     },
     {
         "name": "obtener_resumen_negocio",
-        "description": "Snapshot completo del estado actual de la tienda.",
+        "description": "Snapshot completo del estado actual de la tienda: total productos, stock, ingresos y top ventas.",
         "input_schema": {"type": "object", "properties": {}, "required": []},
+    },
+    # ── Gestión de inventario ──
+    {
+        "name": "listar_productos",
+        "description": "Lista todos los productos del usuario con ID, nombre, categoría, precio y stock. Úsala para responder qué productos hay o para encontrar el ID antes de eliminar o asignar imagen.",
+        "input_schema": {"type": "object", "properties": {}, "required": []},
+    },
+    {
+        "name": "listar_categorias",
+        "description": "Lista todas las categorías del usuario con ID y nombre. Úsala antes de crear un producto.",
+        "input_schema": {"type": "object", "properties": {}, "required": []},
+    },
+    {
+        "name": "crear_categoria",
+        "description": "Crea una nueva categoría. Si ya existe con ese nombre no crea duplicados.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "nombre": {"type": "string", "description": "Nombre de la categoría."},
+            },
+            "required": ["nombre"],
+        },
+    },
+    {
+        "name": "crear_producto",
+        "description": "Crea un nuevo producto en el inventario. Si la categoría no existe, la crea automáticamente.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "nombre": {"type": "string", "description": "Nombre del producto."},
+                "categoria": {"type": "string", "description": "Nombre de la categoría del producto."},
+                "precio_unitario": {"type": "number", "description": "Precio unitario en pesos colombianos."},
+                "stock_actual": {"type": "integer", "description": "Cantidad actual en inventario. Por defecto 0.", "default": 0},
+                "stock_minimo": {"type": "integer", "description": "Cantidad mínima antes de alertar stock bajo. Por defecto 5.", "default": 5},
+            },
+            "required": ["nombre", "categoria", "precio_unitario"],
+        },
+    },
+    {
+        "name": "eliminar_producto",
+        "description": "Elimina un producto por su ID. Llama listar_productos primero para obtener el ID correcto.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "producto_id": {"type": "integer", "description": "ID numérico del producto a eliminar."},
+            },
+            "required": ["producto_id"],
+        },
+    },
+    {
+        "name": "buscar_y_asignar_imagen",
+        "description": "Busca una foto del producto en internet y la asigna automáticamente. Requiere el ID del producto.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "producto_id": {"type": "integer", "description": "ID del producto al que asignar la imagen."},
+            },
+            "required": ["producto_id"],
+        },
     },
 ]
 
@@ -153,11 +243,13 @@ def enviar_mensaje(usuario, texto_usuario: str) -> dict:
     if proveedor != "ollama" and not api_key:
         return {
             "tipo_respuesta": "texto",
+            "modo_dashboard": "agregar",
             "texto": (
                 f"No tienes una API key configurada para {proveedor.capitalize()}. "
                 "Ve a 'Mi cuenta' y agrega tu key."
             ),
             "grafica": None,
+            "graficas": [],
         }
 
     conversacion, _ = Conversacion.objects.get_or_create(usuario=usuario)
@@ -204,7 +296,6 @@ def enviar_mensaje(usuario, texto_usuario: str) -> dict:
 
 def _llamar_claude(api_key: str, mensajes: list, usuario=None) -> dict:
     client = anthropic.Anthropic(api_key=api_key)
-    # Primera llamada: forzar uso de herramienta para consultar datos reales del usuario
     tool_choice = {"type": "any"}
     while True:
         respuesta = client.messages.create(
@@ -215,7 +306,6 @@ def _llamar_claude(api_key: str, mensajes: list, usuario=None) -> dict:
             tool_choice=tool_choice,
             messages=mensajes,
         )
-        # Llamadas siguientes: el modelo puede decidir si necesita más datos
         tool_choice = {"type": "auto"}
         if respuesta.stop_reason == "tool_use":
             tool_results = []
@@ -245,7 +335,6 @@ def _llamar_openai_compat(proveedor: str, api_key: str, mensajes: list, usuario=
     while True:
         kwargs = {"model": modelo, "messages": mensajes, "tools": TOOLS_OPENAI}
         if primera_llamada:
-            # Groq y Gemini soportan "required"; Ollama puede no soportarlo — intentamos y hacemos fallback
             try:
                 respuesta = client.chat.completions.create(**kwargs, tool_choice="required")
             except Exception:
@@ -286,7 +375,7 @@ def _parsear_json(texto: str) -> dict:
     except json.JSONDecodeError:
         pass
 
-    # 3. Extrae el primer objeto JSON del texto (maneja prefijos como <function-null>)
+    # 3. Extrae el primer objeto JSON del texto
     inicio = texto.find("{")
     fin = texto.rfind("}") + 1
     if inicio != -1 and fin > inicio:
@@ -295,9 +384,14 @@ def _parsear_json(texto: str) -> dict:
         except json.JSONDecodeError:
             pass
 
-    # 4. Fallback: devuelve el texto limpio sin artefactos del modelo
+    # 4. Fallback
     texto_limpio = re.sub(r'<[^>]+>', '', texto).strip()
-    return {"tipo_respuesta": "texto", "texto": texto_limpio or texto, "grafica": None}
+    return {
+        "tipo_respuesta": "texto",
+        "modo_dashboard": "agregar",
+        "texto": texto_limpio or texto,
+        "grafica": None,
+    }
 
 
 def obtener_historial(usuario) -> list:
