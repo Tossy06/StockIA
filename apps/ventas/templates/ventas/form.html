@@ -21,10 +21,9 @@
             {% for p in productos %}
               <option value="{{ p.pk }}"
                 data-nombre="{{ p.nombre }}"
-                data-precio="{{ p.precio_unitario }}"
+                data-unit="{{ p.precio_unitario }}"
                 data-stock="{{ p.stock_actual }}">
-                {{ p.nombre }} — <span data-precio="{{ p.precio_unitario }}">${{ p.precio_unitario }}</span>
-                (stock: {{ p.stock_actual }})
+                {{ p.nombre }} — ${{ p.precio_unitario }} (stock: {{ p.stock_actual }})
               </option>
             {% endfor %}
           </select>
@@ -96,7 +95,7 @@ document.getElementById('sel-prod').addEventListener('change',function(){
   var info=document.getElementById('stock-info');
   if(this.value){
     info.className='alert alert-info py-2';
-    info.textContent='Stock disponible: '+opt.dataset.stock+' unidades · Precio: $'+parseFloat(opt.dataset.precio).toLocaleString('en-US',{minimumFractionDigits:0,maximumFractionDigits:2});
+    info.textContent='Stock disponible: '+opt.dataset.stock+' unidades · Precio: $'+parseFloat(opt.dataset.unit).toLocaleString('en-US',{minimumFractionDigits:0,maximumFractionDigits:2});
   }else{info.className='alert alert-info py-2 d-none';}
 });
 
@@ -109,7 +108,7 @@ function agregarLinea(){
   if(cant>parseInt(opt.dataset.stock)){alert('Stock insuficiente. Disponible: '+opt.dataset.stock);return;}
   var ex=lineas.find(l=>l.producto_id==sel.value);
   if(ex){ex.cantidad+=cant;}
-  else{lineas.push({producto_id:parseInt(sel.value),nombre:opt.dataset.nombre,precio:parseFloat(opt.dataset.precio),cantidad:cant});}
+  else{lineas.push({producto_id:parseInt(sel.value),nombre:opt.dataset.nombre,precio:parseFloat(opt.dataset.unit),cantidad:cant});}
   renderTabla();
 }
 

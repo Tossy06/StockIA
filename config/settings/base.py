@@ -89,7 +89,7 @@ MEDIA_ROOT = BASE_DIR / "media"
 # ── Almacenamiento de archivos ────────────────────────────────────────────────
 # En producción (Railway) se usa Cloudinary para persistir las imágenes entre deploys.
 # En local sin CLOUDINARY_URL se usa el filesystem normal.
-_CLOUDINARY_URL = os.environ.get("CLOUDINARY_URL", "")
+_CLOUDINARY_URL = config("CLOUDINARY_URL", default="")
 if _CLOUDINARY_URL:
     INSTALLED_APPS += ["cloudinary", "cloudinary_storage"]
     CLOUDINARY_STORAGE = {"CLOUDINARY_URL": _CLOUDINARY_URL}
