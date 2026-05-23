@@ -14,7 +14,7 @@ QUERY_EXTRACTORS = {
         [int(p["total_vendido"]) for p in r],
     ),
     "obtener_ventas_por_periodo": lambda r: (
-        [str(p["fecha__date"]) for p in r],
+        [str(p.get("fecha") or p.get("fecha__date", "")) for p in r],
         [float(p["total"]) for p in r],
     ),
     "obtener_ingresos": lambda r: (

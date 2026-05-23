@@ -5,21 +5,38 @@ if not django.conf.settings.configured:
     os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings.dev")
     django.setup()
 
-from django.db.models import Sum, F
+from django.db.models import Sum, F, ExpressionWrapper, DecimalField
 from django.utils import timezone
 from apps.catalogo.models import Producto, Categoria
 from apps.ventas.models import Venta, LineaVenta
 
 
-# ── HERRAMIENTAS DE CONSULTA ANALÍTICA ──────────────────────────────────────
+# ── UTILIDAD INTERNA ─────────────────────────────────────────────────────────
+
+def _desde_periodo(periodo: str):
+    """Retorna el datetime de inicio del período indicado."""
+    hoy = timezone.now()
+    if periodo == "dia":
+        return hoy.replace(hour=0, minute=0, second=0, microsecond=0)
+    if periodo == "semana":
+        inicio = hoy - timezone.timedelta(days=hoy.weekday())
+        return inicio.replace(hour=0, minute=0, second=0, microsecond=0)
+    # mes
+    return hoy.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+
+
+# ── HERRAMIENTAS ANALÍTICAS ──────────────────────────────────────────────────
 
 def obtener_stock_critico(usuario=None) -> list[dict]:
+    """Productos con stock por debajo del 50% del mínimo."""
     qs = Producto.objects.filter(activo=True)
     if usuario is not None:
         qs = qs.filter(usuario=usuario)
     return [
         {
+            "id": p.pk,
             "nombre": p.nombre,
+            "categoria": p.categoria.nombre,
             "stock_actual": p.stock_actual,
             "stock_minimo": p.stock_minimo,
         }
@@ -27,46 +44,69 @@ def obtener_stock_critico(usuario=None) -> list[dict]:
     ]
 
 
+def obtener_stock_bajo(usuario=None) -> list[dict]:
+    """Productos con stock bajo (≤ mínimo) o crítico (≤ 50% del mínimo)."""
+    qs = Producto.objects.filter(activo=True)
+    if usuario is not None:
+        qs = qs.filter(usuario=usuario)
+    return [
+        {
+            "id": p.pk,
+            "nombre": p.nombre,
+            "categoria": p.categoria.nombre,
+            "stock_actual": p.stock_actual,
+            "stock_minimo": p.stock_minimo,
+            "estado": p.estado_stock,
+        }
+        for p in qs if p.estado_stock in ("bajo", "critico")
+    ]
+
+
 def obtener_ventas_por_periodo(inicio: str, fin: str, usuario=None) -> list[dict]:
+    """Ventas totales agrupadas por día entre dos fechas (YYYY-MM-DD)."""
     qs = Venta.objects.filter(fecha__date__range=[inicio, fin])
     if usuario is not None:
         qs = qs.filter(usuario=usuario)
-    return list(
+    rows = list(
         qs.values("fecha__date")
         .annotate(total=Sum("total"))
         .order_by("fecha__date")
     )
+    return [{"fecha": str(r["fecha__date"]), "total": float(r["total"] or 0)} for r in rows]
 
 
 def obtener_top_productos(limite=5, periodo: str = "mes", usuario=None) -> list[dict]:
-    limite = int(limite)
-    hoy = timezone.now()
-    if periodo == "dia":
-        desde = hoy.replace(hour=0, minute=0, second=0, microsecond=0)
-    elif periodo == "semana":
-        desde = hoy - timezone.timedelta(days=hoy.weekday())
-        desde = desde.replace(hour=0, minute=0, second=0, microsecond=0)
-    else:
-        desde = hoy.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    """Productos más vendidos del período (dia / semana / mes)."""
+    desde = _desde_periodo(periodo)
     qs = LineaVenta.objects.filter(venta__fecha__gte=desde)
     if usuario is not None:
         qs = qs.filter(venta__usuario=usuario)
-    return list(
+    rows = list(
         qs.values(nombre=F("producto__nombre"))
-        .annotate(total_vendido=Sum("cantidad"))
-        .order_by("-total_vendido")[:limite]
+        .annotate(
+            total_vendido=Sum("cantidad"),
+            ingresos=Sum(
+                ExpressionWrapper(
+                    F("cantidad") * F("precio_unitario"),
+                    output_field=DecimalField(),
+                )
+            ),
+        )
+        .order_by("-total_vendido")[: int(limite)]
     )
+    return [
+        {
+            "nombre": r["nombre"],
+            "total_vendido": r["total_vendido"],
+            "ingresos": float(r["ingresos"] or 0),
+        }
+        for r in rows
+    ]
 
 
 def obtener_ingresos(periodo: str = "mes", usuario=None) -> dict:
-    hoy = timezone.now()
-    if periodo == "dia":
-        desde = hoy.replace(hour=0, minute=0, second=0, microsecond=0)
-    elif periodo == "semana":
-        desde = hoy - timezone.timedelta(days=hoy.weekday())
-        desde = desde.replace(hour=0, minute=0, second=0, microsecond=0)
-    else:
-        desde = hoy.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    """Ingresos totales del período (dia / semana / mes)."""
+    desde = _desde_periodo(periodo)
     qs = Venta.objects.filter(fecha__gte=desde)
     if usuario is not None:
         qs = qs.filter(usuario=usuario)
@@ -75,6 +115,7 @@ def obtener_ingresos(periodo: str = "mes", usuario=None) -> dict:
 
 
 def obtener_resumen_negocio(usuario=None) -> dict:
+    """Snapshot completo: productos, stock, ingresos del día/semana/mes y top ventas."""
     qs = Producto.objects.filter(activo=True)
     if usuario is not None:
         qs = qs.filter(usuario=usuario)
@@ -85,15 +126,80 @@ def obtener_resumen_negocio(usuario=None) -> dict:
         "stock_bajo": sum(1 for p in productos if p.estado_stock == "bajo"),
         "stock_critico": sum(1 for p in productos if p.estado_stock == "critico"),
         "ingresos_hoy": obtener_ingresos("dia", usuario)["total"],
+        "ingresos_semana": obtener_ingresos("semana", usuario)["total"],
         "ingresos_mes": obtener_ingresos("mes", usuario)["total"],
         "top_productos": obtener_top_productos(5, "mes", usuario),
+    }
+
+
+def listar_ventas_recientes(limite: int = 10, usuario=None) -> list[dict]:
+    """Últimas N ventas con detalle de productos vendidos."""
+    qs = Venta.objects.filter(usuario=usuario).prefetch_related(
+        "lineas__producto"
+    ).order_by("-fecha")[: int(limite)]
+    result = []
+    for v in qs:
+        result.append(
+            {
+                "id": v.pk,
+                "fecha": v.fecha.strftime("%d/%m/%Y %H:%M"),
+                "total": float(v.total),
+                "productos": [
+                    {
+                        "nombre": lv.producto.nombre,
+                        "cantidad": lv.cantidad,
+                        "precio_unitario": float(lv.precio_unitario),
+                        "subtotal": float(lv.cantidad * lv.precio_unitario),
+                    }
+                    for lv in v.lineas.all()
+                ],
+            }
+        )
+    return result
+
+
+def obtener_ventas_producto(nombre_producto: str, periodo: str = "mes", usuario=None) -> dict:
+    """Cuánto se vendió de un producto específico en el período (dia / semana / mes)."""
+    desde = _desde_periodo(periodo)
+    qs = LineaVenta.objects.filter(
+        venta__fecha__gte=desde,
+        producto__nombre__icontains=nombre_producto,
+    )
+    if usuario is not None:
+        qs = qs.filter(venta__usuario=usuario)
+
+    total_unidades = qs.aggregate(t=Sum("cantidad"))["t"] or 0
+    total_ingresos = (
+        qs.aggregate(
+            t=Sum(
+                ExpressionWrapper(
+                    F("cantidad") * F("precio_unitario"),
+                    output_field=DecimalField(),
+                )
+            )
+        )["t"]
+        or 0
+    )
+    detalle = list(
+        qs.values("producto__nombre")
+        .annotate(cantidad=Sum("cantidad"))
+        .order_by("-cantidad")
+    )
+    return {
+        "busqueda": nombre_producto,
+        "periodo": periodo,
+        "total_unidades": int(total_unidades),
+        "total_ingresos": float(total_ingresos),
+        "productos_encontrados": [
+            {"nombre": d["producto__nombre"], "cantidad": d["cantidad"]} for d in detalle
+        ],
     }
 
 
 # ── HERRAMIENTAS DE GESTIÓN DE INVENTARIO ───────────────────────────────────
 
 def listar_productos(usuario=None) -> list[dict]:
-    """Devuelve todos los productos activos del usuario con ID, nombre, categoría, precio y stock."""
+    """Lista todos los productos activos con ID, nombre, categoría, precio y stock."""
     qs = Producto.objects.select_related("categoria").filter(activo=True)
     if usuario is not None:
         qs = qs.filter(usuario=usuario)
@@ -112,7 +218,7 @@ def listar_productos(usuario=None) -> list[dict]:
 
 
 def listar_categorias(usuario=None) -> list[dict]:
-    """Devuelve todas las categorías del usuario."""
+    """Lista todas las categorías del usuario."""
     qs = Categoria.objects.all()
     if usuario is not None:
         qs = qs.filter(usuario=usuario)
@@ -120,7 +226,7 @@ def listar_categorias(usuario=None) -> list[dict]:
 
 
 def crear_categoria(nombre: str, usuario=None) -> dict:
-    """Crea una nueva categoría. Si ya existe con ese nombre, la retorna sin duplicar."""
+    """Crea una nueva categoría. No crea duplicados si ya existe con ese nombre."""
     existing = Categoria.objects.filter(usuario=usuario, nombre__iexact=nombre).first()
     if existing:
         return {"id": existing.pk, "nombre": existing.nombre, "ya_existia": True}
@@ -136,7 +242,7 @@ def crear_producto(
     stock_minimo: int = 5,
     usuario=None,
 ) -> dict:
-    """Crea un nuevo producto. Si la categoría no existe, la crea automáticamente."""
+    """Crea un producto nuevo. Si la categoría no existe, la crea automáticamente."""
     cat_qs = Categoria.objects.filter(usuario=usuario, nombre__iexact=categoria)
     if cat_qs.exists():
         cat = cat_qs.first()
@@ -165,18 +271,21 @@ def crear_producto(
 
 
 def eliminar_producto(producto_id: int, usuario=None) -> dict:
-    """Elimina un producto por ID. Solo elimina productos que pertenecen al usuario."""
+    """Elimina un producto por ID. Solo borra productos del propio usuario."""
     try:
         p = Producto.objects.get(pk=producto_id, usuario=usuario)
         nombre = p.nombre
         p.delete()
         return {"ok": True, "mensaje": f"Producto '{nombre}' eliminado correctamente."}
     except Producto.DoesNotExist:
-        return {"ok": False, "error": f"Producto con ID {producto_id} no encontrado o no te pertenece."}
+        return {
+            "ok": False,
+            "error": f"Producto con ID {producto_id} no encontrado o no te pertenece.",
+        }
 
 
 def buscar_y_asignar_imagen(producto_id: int, usuario=None) -> dict:
-    """Busca una imagen en internet usando el nombre del producto y la asigna automáticamente."""
+    """Busca una imagen en internet por nombre del producto y la asigna automáticamente."""
     import urllib.request
     import urllib.parse
     from django.core.files.base import ContentFile
@@ -184,7 +293,10 @@ def buscar_y_asignar_imagen(producto_id: int, usuario=None) -> dict:
     try:
         producto = Producto.objects.get(pk=producto_id, usuario=usuario)
     except Producto.DoesNotExist:
-        return {"ok": False, "error": f"Producto ID {producto_id} no encontrado o no te pertenece."}
+        return {
+            "ok": False,
+            "error": f"Producto ID {producto_id} no encontrado o no te pertenece.",
+        }
 
     keyword = urllib.parse.quote(producto.nombre)
     url = f"https://loremflickr.com/400/400/{keyword}/all"
@@ -194,7 +306,7 @@ def buscar_y_asignar_imagen(producto_id: int, usuario=None) -> dict:
         with urllib.request.urlopen(req, timeout=15) as resp:
             content_type = resp.headers.get("Content-Type", "")
             if "image" not in content_type:
-                return {"ok": False, "error": "No se encontró una imagen para ese producto."}
+                return {"ok": False, "error": "No se encontró imagen para ese producto."}
             data = resp.read()
         ext = "jpg" if "jpeg" in content_type else "png"
         filename = f"ai_{producto.pk}_{int(timezone.now().timestamp())}.{ext}"
@@ -214,11 +326,14 @@ def buscar_y_asignar_imagen(producto_id: int, usuario=None) -> dict:
 HERRAMIENTAS_MAP = {
     # Analíticas
     "obtener_stock_critico": obtener_stock_critico,
+    "obtener_stock_bajo": obtener_stock_bajo,
     "obtener_ventas_por_periodo": obtener_ventas_por_periodo,
     "obtener_top_productos": obtener_top_productos,
     "obtener_ingresos": obtener_ingresos,
     "obtener_resumen_negocio": obtener_resumen_negocio,
-    # Gestión de inventario
+    "listar_ventas_recientes": listar_ventas_recientes,
+    "obtener_ventas_producto": obtener_ventas_producto,
+    # Gestión
     "listar_productos": listar_productos,
     "listar_categorias": listar_categorias,
     "crear_categoria": crear_categoria,
